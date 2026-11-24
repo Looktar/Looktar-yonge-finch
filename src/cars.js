@@ -29,19 +29,21 @@ function profile(pts, z) {
 
 export function carGeoms(kind) {
   const K = KINDS[kind]; const hl = K.L / 2, hw0 = K.W / 2, yb = 0.24;
-  const NS = 28, NR = 20; // stations along the car, points around each section
+  const NS = 44, NR = 20; // stations along the car, points around each section
   const P = [], rings = [];
   for (let s = 0; s < NS; s++) {
     const z = -hl + K.L * s / (NS - 1);
     const end = Math.abs(z) / hl; const plan = 1 - 0.1 * Math.pow(end, 4); // rounded nose and tail in plan
     const top = profile(K.top, z), hw = hw0 * plan;
+    // wheel arches: the bottom of the section lifts over each axle so the tyres show from the side
+    let ybs = yb; for (const az of [K.base / 2, -K.base / 2]) { const dz = Math.abs(z - az) / (K.tyre + 0.1); if (dz < 1) ybs = Math.max(ybs, yb + (K.tyre * 2.05 - yb) * Math.sqrt(1 - dz * dz)); }
     const ring = [];
     for (let k = 0; k < NR; k++) {
       // rounded rectangle via superellipse, k = 0 at the bottom centre going round
       const a = (k / NR) * Math.PI * 2 - Math.PI / 2; const c = Math.cos(a), sn = Math.sin(a);
       const ex = 0.22, ey = 0.3; // roundness
       let x = Math.sign(c) * Math.pow(Math.abs(c), ex) * hw;
-      let y = yb + (top - yb) * (0.5 + 0.5 * Math.sign(sn) * Math.pow(Math.abs(sn), ey));
+      let y = ybs + (top - ybs) * (0.5 + 0.5 * Math.sign(sn) * Math.pow(Math.abs(sn), ey));
       if (y > K.belt) { const t = (y - K.belt) / Math.max(0.05, top - K.belt); x *= 1 - 0.17 * t; } // tumblehome
       ring.push(P.length / 3); P.push(x, y, z);
     }
@@ -50,17 +52,20 @@ export function carGeoms(kind) {
   // end caps
   const capF = P.length / 3; P.push(0, (yb + profile(K.top, hl)) / 2, hl);
   const capR = P.length / 3; P.push(0, (yb + profile(K.top, -hl)) / 2, -hl);
-  const tris = [];
+  const tris = [], quadOf = [];
   for (let s = 0; s < NS - 1; s++) for (let k = 0; k < NR; k++) {
     const a = rings[s][k], b = rings[s][(k + 1) % NR], c = rings[s + 1][k], d = rings[s + 1][(k + 1) % NR];
-    tris.push([a, b, c], [b, d, c]); // outward: the ring runs counter-clockwise seen from the front
+    tris.push([a, b, c], [b, d, c]); quadOf.push(s * NR + k, s * NR + k); // outward: the ring runs counter-clockwise seen from the front
   }
   for (let k = 0; k < NR; k++) { tris.push([capF, rings[NS - 1][k], rings[NS - 1][(k + 1) % NR]]); tris.push([capR, rings[0][(k + 1) % NR], rings[0][k]]); }
   // classify triangles
   const parts = { body: [], glass: [], trim: [] };
   const roofTop = Math.max(...K.top.map(p => p[1]));
-  for (const t of tris) {
-    let cy = 0, cz = 0, cx = 0; for (const i of t) { cx += P[i * 3] / 3; cy += P[i * 3 + 1] / 3; cz += P[i * 3 + 2] / 3; }
+  // classify whole quads (both triangles together) so the window line follows the stations, not a sawtooth
+  const quadC = new Map();
+  tris.forEach((t, ti) => { const qk = ti < quadOf.length ? quadOf[ti] : -1 - ti; const c = quadC.get(qk) || [0, 0, 0, 0]; for (const i of t) { c[0] += P[i * 3]; c[1] += P[i * 3 + 1]; c[2] += P[i * 3 + 2]; c[3]++; } quadC.set(qk, c); });
+  for (let ti = 0; ti < tris.length; ti++) {
+    const t = tris[ti]; const qc = quadC.get(ti < quadOf.length ? quadOf[ti] : -1 - ti); const cy = qc[1] / qc[3], cz = qc[2] / qc[3];
     const inCabin = cz > K.cabin[0] && cz < K.cabin[1];
     const glass = inCabin && cy > K.belt + 0.03 && cy < roofTop - 0.05 && Math.abs(cz - K.pillarB) > 0.07;
     const trim = cy < yb + 0.16 || (Math.abs(cz) > hl - 0.1 && cy < yb + 0.3);

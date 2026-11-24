@@ -230,9 +230,9 @@ function buildRoads(roads, tex) {
   });
   // ---- curbs: a pale 15 cm concrete kerb with a darker gutter along both edges of every street, broken where the
   // edge runs across another carriageway (intersections, driveways onto arterials)
-  const RS = 0.5, RN = Math.ceil(EXT * 2 / RS), cover = new Uint8Array(RN * RN);
-  for (const r of roads) { if (!r.w || r.t === 'ser') continue; const h = r.w / 2 + 0.05; for (let i = 0; i < r.p.length - 1; i++) { const a = r.p[i], b = r.p[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); const ux = (b[0] - a[0]) / (L || 1), uz = (b[1] - a[1]) / (L || 1); for (let s = -h; s <= L + h; s += 0.25) { const x = a[0] + ux * s, z = a[1] + uz * s; for (let o = -h; o <= h; o += 0.25) { const ix = Math.floor((x - uz * o + EXT) / RS), iz = Math.floor((z + ux * o + EXT) / RS); if (ix >= 0 && iz >= 0 && ix < RN && iz < RN) cover[ix + iz * RN] = 1; } } } }
-  const covered = (x, z) => { const ix = Math.floor((x + EXT) / RS), iz = Math.floor((z + EXT) / RS); return ix >= 0 && iz >= 0 && ix < RN && iz < RN && cover[ix + iz * RN] === 1; };
+  const RS = 0.5, RN = Math.ceil(EXT * 2 / RS), cover = new Int16Array(RN * RN).fill(-1); // owner road index, -2 = several
+  roads.forEach((r, ri) => { if (!r.w || r.t === 'ser') return; const h = r.w / 2 + 0.05; for (let i = 0; i < r.p.length - 1; i++) { const a = r.p[i], b = r.p[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); const ux = (b[0] - a[0]) / (L || 1), uz = (b[1] - a[1]) / (L || 1); for (let s = -h; s <= L + h; s += 0.25) { const x = a[0] + ux * s, z = a[1] + uz * s; for (let o = -h; o <= h; o += 0.25) { const ix = Math.floor((x - uz * o + EXT) / RS), iz = Math.floor((z + ux * o + EXT) / RS); if (ix >= 0 && iz >= 0 && ix < RN && iz < RN) { const kk = ix + iz * RN; cover[kk] = cover[kk] === -1 || cover[kk] === ri ? ri : -2; } } } } });
+  const covered = (x, z, self) => { const ix = Math.floor((x + EXT) / RS), iz = Math.floor((z + EXT) / RS); if (ix < 0 || iz < 0 || ix >= RN || iz >= RN) return false; const k = cover[ix + iz * RN]; return k === -2 || (k >= 0 && k !== self); };
   const curb = { pos: [], uv: [], nrm: [] }, gutter = { pos: [], uv: [] };
   const CH = 0.15, CW = 0.22;
   const quad = (o, A, B, C, D, n) => { for (const q of [A, B, C, A, C, D]) { o.pos.push(q[0], q[1], q[2]); o.uv.push(q[3], q[4]); if (o.nrm) o.nrm.push(n[0], n[1], n[2]); } };
@@ -245,7 +245,7 @@ function buildRoads(roads, tex) {
       for (let k = 0; k < n; k++) {
         const s0 = L * k / n, s1 = L * (k + 1) / n, sm = (s0 + s1) / 2;
         const off = r.w / 2, mx = a[0] + tx * sm + nx * (off + 0.4), mz = a[1] + tz * sm + nz * (off + 0.4);
-        if (covered(mx, mz)) continue;
+        if (covered(mx, mz, roads.indexOf(r))) continue;
         const P = (s, o, y, u, v) => [a[0] + tx * s + nx * o, y, a[1] + tz * s + nz * o, u, v];
         quad(curb, P(s0, off, 0.03, s0, 0), P(s1, off, 0.03, s1, 0), P(s1, off, CH, s1, 0.15), P(s0, off, CH, s0, 0.15), [-nx, 0, -nz]); // kerb face
         quad(curb, P(s0, off, CH, s0, 0.15), P(s1, off, CH, s1, 0.15), P(s1, off + CW, CH, s1, 0.37), P(s0, off + CW, CH, s0, 0.37), [0, 1, 0]); // kerb top
