@@ -162,7 +162,7 @@ composer.addPass(grade);
 function applyQuality() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); composer.setSize(innerWidth, innerHeight); if (typeof finalPass !== 'undefined') { const pr = Math.min(devicePixelRatio, Q.pr); finalPass.setSize(innerWidth * pr, innerHeight * pr); }
   bloom.enabled = Q.bloom; if (typeof finalPass !== 'undefined') finalPass.enabled = !OFF('post'); if (typeof outPass !== 'undefined') outPass.enabled = OFF('post'); lampLights.forEach((l, i) => l.visible = i < Q.lights);
-  if (OFF('ao')) Q.ao = false; if (OFF('wet')) Q.refl = 0; if (OFF('bloom')) Q.bloom = false;
+  if (OFF('ao') || (TOUCH && !window.__aoForce)) Q.ao = false; if (OFF('wet')) Q.refl = 0; if (OFF('bloom')) Q.bloom = false;
   aoPass.enabled = !!Q.ao; basePass.enabled = !Q.ao; aoPass.configuration.halfRes = Q.ao !== 'full'; smaa.enabled = Q.aa;
   if (typeof mirror !== 'undefined') { mirror.visible = Q.refl > 0; WET.uReflOn.value = Q.refl > 0 ? 1 : 0; if (!(Q.refl > 0)) WET.tRefl.value = WET.BLACK; const pr = Math.min(devicePixelRatio, Q.pr); mirror.getRenderTarget().setSize(Math.max(64, Math.round(innerWidth * pr * Q.refl)), Math.max(64, Math.round(innerHeight * pr * Q.refl))); }
   if (typeof sun !== 'undefined') { const on = Q.shadow > 0; if (sun.castShadow !== on || (on && sun.shadow.mapSize.x !== Q.shadow)) { sun.castShadow = on; if (on) { sun.shadow.mapSize.set(Q.shadow, Q.shadow); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } } scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); } }
@@ -620,8 +620,14 @@ if (HS === 'debug' || QS.has('debug')) {
     T('vm', '枪模', () => { window.__noVm = false; }, () => { window.__noVm = true; }),
     T('shadow', '阴影', () => { sun.castShadow = Q.shadow > 0; allMats(m => m.needsUpdate = true); }, () => { sun.castShadow = false; allMats(m => m.needsUpdate = true); }),
     T('mirror', '地面反射', () => { Q.refl = 0.45; applyQuality(); }, () => { Q.refl = 0; applyQuality(); }),
+    T('ao', '环境光遮蔽AO', () => { window.__aoForce = true; Q.ao = Q.ao0 || 'half'; applyQuality(); }, () => { Q.ao0 = Q.ao || Q.ao0; Q.ao = false; applyQuality(); }),
     T('facade', '楼面细节', () => { allMats(m => { if (m.userData.shader) m.userData.shader.uniforms.uWinI.value = 1; }); }, () => { allMats(m => { if (m.userData.shader) m.userData.shader.uniforms.uWinI.value = 0; }); }),
   );
+  { const all = document.createElement('button'); all.textContent = '全部最简'; all.style.cssText = 'margin:3px;padding:6px 10px;font:13px sans-serif;border-radius:6px;border:0;background:#e9edf0';
+    ['touchstart', 'pointerdown', 'mousedown'].forEach(ev => all.addEventListener(ev, e => e.stopPropagation()));
+    all.onclick = e => { e.stopPropagation(); box.querySelectorAll('button').forEach(bt => { if (bt !== all && /开$/.test(bt.textContent)) bt.click(); }); }; box.appendChild(all); }
+  const live = document.createElement('div'); live.style.cssText = 'font:12px monospace;color:#9fd'; box.insertBefore(live, list);
+  setInterval(() => { live.textContent = '曝光 ' + finalPass.uniforms.toneMappingExposure.value.toFixed(2) + ' | 平均亮度 ' + (finalPass.avg || 0).toFixed(3) + ' | AO ' + (aoPass.enabled ? '开' : '关') + ' | 像素比 ' + renderer.getPixelRatio().toFixed(2) + ' | ' + renderer.info.render.calls + ' 次绘制'; }, 500);
   document.body.appendChild(box);
 }
 window.__yf = { S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun, tick: () => frameNo++, mirror, WET, finalPass, vmScene, vmCam, vmRoot };
