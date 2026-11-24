@@ -76,8 +76,20 @@ function parseBuildings() {
 const C = (hex) => new THREE.Color(hex).convertSRGBToLinear();
 function tagAt(c) { let best = null, bd = 14; for (const t of TAGS) { const d = Math.hypot(t[0] - c[0], t[1] - c[1]); if (d < bd) { bd = d; best = t[2]; } } return best; }
 
+// per-building looks checked against Google Street View (docs/RESEARCH-visuals.md, "逐栋核对"). Matched by footprint
+// centroid within rad metres; every building part of the complex inside the radius takes the same look.
+// st: CONDO precast + window wall | GLASS curtain wall | BRK brick slab | RIB office ribbon windows
+// balc: null | 'stack' | 'wrap'; solid: masonry balcony fronts instead of glass
+export const LOOKS = [];
+function lookAt(c) { let best = null, bd = 1e9; for (const L of LOOKS) { const d = Math.hypot(L.at[0] - c[0], L.at[1] - c[1]); if (d < L.rad && d < bd) { bd = d; best = L; } } return best; }
+function applyLook(b, L, r) {
+  b.res = L.st !== 'RIB'; b.fh = L.fh || (L.st === 'RIB' ? 3.8 : 2.9); b.st = ST[L.st]; b.wall = C(L.wall); b.acc = C(L.glass || '#3a4a55');
+  b.balc = L.balc ? { kind: L.balc, solid: !!L.solid, d: L.d || 1.5, slab: L.slab ? C(L.slab) : null } : null;
+  if (L.bands) b.bands = L.bands; b.look = L.name; void r;
+}
 function assignStyle(b, r) {
   const [cx, cz] = b.c; const tag = tagAt(b.c);
+  { const L = lookAt(b.c); if (L && !b.house && b.H > 12) { b.roofKind = 'flat'; applyLook(b, L, r); return; } }
   b.fh = 3.0; b.acc = C(PALS.glass.clear); b.balc = null; b.roofKind = 'flat';
   const nac = cx > -118 && cx < -22 && cz > -98 && cz < 88;
   if (nac && b.H > 40) { // North American Centre: rose granite bands + bronze reflective glass, sloped glass crowns
