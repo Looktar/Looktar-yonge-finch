@@ -53,6 +53,9 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   #endif
   gl_FragColor.rgb = mix(gl_FragColor.rgb, fogC, fogFactor);
 #endif`;
+// half-float frame buffers overflow to Inf above 65504; a near-mirror surface catching the sun (puddles, wet
+// glass, droplets) can exceed that on real GPUs, and bloom then smears Inf/NaN over the whole frame
+THREE.ShaderChunk.opaque_fragment = 'outgoingLight = clamp(outgoingLight, vec3(0.0), vec3(3e4));\n' + THREE.ShaderChunk.opaque_fragment;
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x9c8f9a, 0.0019);
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 700);
@@ -132,7 +135,7 @@ aoPass.setQualityMode('Medium'); composer.addPass(aoPass);
 // a stray NaN / Inf from any shader on some GPUs would be smeared over the whole frame by bloom (black screen):
 // scrub them right after the scene render
 const sanitize = new ShaderPass({ uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); bvec4 bad = bvec4(c.r != c.r || c.r > 1e5, c.g != c.g || c.g > 1e5, c.b != c.b || c.b > 1e5, false); c.rgb = mix(clamp(c.rgb, 0.0, 6e4), vec3(0.0), vec3(bad.rgb)); gl_FragColor = vec4(max(c.rgb, 0.0), 1.0); }' });
+  fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; float fin(float x){ return ((floatBitsToUint(x) & 0x7f800000u) == 0x7f800000u) ? 0.0 : clamp(x, 0.0, 3e4); } void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb; gl_FragColor = vec4(fin(c.r), fin(c.g), fin(c.b), 1.0); }' });
 composer.addPass(sanitize);
 let vmPass = null; // added once vmScene exists
 vmPass = new RenderPass(vmScene, vmCam); vmPass.clear = false; vmPass.clearDepth = true; composer.addPass(vmPass);

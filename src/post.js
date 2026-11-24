@@ -21,6 +21,7 @@ export function makeFinalPass() {
       #include <tonemapping_pars_fragment>
       uniform sampler2D tDiffuse; uniform vec2 uTexel; uniform float uTime; uniform vec3 uSun; uniform float uShafts, uStreak, uAgx, uPow, uSat, uCA, uSharpen, uGrain, uVig; uniform vec3 uSunCol;
       varying vec2 vUv;
+      float fin(float x){ return ((floatBitsToUint(x) & 0x7f800000u) == 0x7f800000u) ? 0.0 : clamp(x, 0.0, 3e4); }
       float lum(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
       vec3 hdr(vec2 uv){ return texture2D(tDiffuse, uv).rgb; }
       vec3 tone(vec3 c){ vec3 a = ACESFilmicToneMapping(c); vec3 g = AgXToneMapping(c); return mix(a, g, uAgx); }
@@ -33,7 +34,7 @@ export function makeFinalPass() {
         return c;
       }
       void main(){
-        vec2 uv = vUv; vec3 c = shade(uv); c = (c == c) ? min(c, vec3(6e4)) : vec3(0.0);
+        vec2 uv = vUv; vec3 c = shade(uv); c = vec3(fin(c.r), fin(c.g), fin(c.b));
         // sun shafts: march toward the sun, gathering only the very bright sky
         if (uSun.z > 0.001 && uShafts > 0.0) {
           vec2 dv = (uSun.xy - uv) / 18.0; vec2 p = uv; float acc = 0.0, w = 1.0;
@@ -62,7 +63,7 @@ export function makeFinalPass() {
   });
   // auto exposure: read a 16x16 copy of the HDR frame every few frames and ease toward key / average luminance
   const small = new THREE.WebGLRenderTarget(16, 16, { type: THREE.UnsignedByteType, depthBuffer: false });
-  const copy = new THREE.ShaderMaterial({ uniforms: { t: { value: null } }, vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader: 'uniform sampler2D t; varying vec2 v; void main(){ vec3 c = texture2D(t, v).rgb; c = (c == c) ? c : vec3(0.0); gl_FragColor = vec4(clamp(c / 8.0, 0.0, 1.0), 1.0); }', depthTest: false, depthWrite: false });
+  const copy = new THREE.ShaderMaterial({ uniforms: { t: { value: null } }, vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader: 'uniform sampler2D t; varying vec2 v; float fin(float x){ return ((floatBitsToUint(x) & 0x7f800000u) == 0x7f800000u) ? 0.0 : x; } void main(){ vec3 c = texture2D(t, v).rgb; gl_FragColor = vec4(clamp(vec3(fin(c.r), fin(c.g), fin(c.b)) / 8.0, 0.0, 1.0), 1.0); }', depthTest: false, depthWrite: false });
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), copy); const qs = new THREE.Scene(); qs.add(quad); const qc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const buf = new Uint8Array(16 * 16 * 4); let n = 0, exp = 1, auto = true;
   const sv = new THREE.Vector3();

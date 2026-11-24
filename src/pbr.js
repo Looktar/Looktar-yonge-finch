@@ -69,7 +69,7 @@ export function wetPatch(sh, damp = '1.0', pud = '1.0') { // GLSL expressions: h
     .replace('#include <emissivemap_fragment>', `{
       wPud = wetPud(vWw.xz) * uWet * (${pud}); wDamp = wetDamp(vWw.xz) * uWet * (${damp});
       diffuseColor.rgb *= mix(1.0, 0.6, wDamp) * mix(1.0, 0.42, wPud);
-      roughnessFactor = mix(roughnessFactor, 0.3, wDamp); roughnessFactor = mix(roughnessFactor, 0.03, wPud);
+      roughnessFactor = mix(roughnessFactor, 0.32, wDamp); roughnessFactor = mix(roughnessFactor, 0.14, wPud);
       normal = normalize(mix(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), wPud));
     }
     #include <emissivemap_fragment>`)

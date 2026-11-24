@@ -64,7 +64,7 @@ function wetGun(mat, size = 140) {
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
       { vec3 q = vOp * ${size.toFixed(1)}; vec3 c = floor(q); vec3 f = fract(q) - 0.5; float h = dh(c); vec3 o = vec3(dh(c + 1.3), dh(c + 2.7), dh(c + 4.1)) - 0.5;
         vec3 d = f - o * 0.5; float r = 0.12 + 0.22 * dh(c + 7.7); float dist = length(d); gDrop = step(0.55, h) * (1.0 - smoothstep(r * 0.75, r, dist)); gDn = d / max(r, 1e-3);
-        roughnessFactor = mix(roughnessFactor, 0.04, gDrop); diffuseColor.rgb *= mix(1.0, 0.75, gDrop); }`)
+        roughnessFactor = mix(roughnessFactor, 0.15, gDrop); diffuseColor.rgb *= mix(1.0, 0.75, gDrop); }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       normal = normalize(normal + (viewMatrix * vec4(gDn, 0.0)).xyz * gDrop * 0.6);`);
   };
