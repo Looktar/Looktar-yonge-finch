@@ -491,6 +491,22 @@ export function buildCity(roads, col) {
     }
     if (b.mh < 1) col.addPoly(p);
 
+    // floor-slab edges standing proud of the wall on apartment towers without wrap-around balconies: the
+    // horizontal concrete lines that give Toronto condo and 1970s slab towers their depth
+    if ((b.st === ST.CONDO || b.st === ST.BRK) && H - y0 > 18 && !(b.balc && b.balc.kind === 'wrap') && Math.hypot(b.c[0] - 0, b.c[1] - 60) < 420) {
+      const fh = b.fh, nF = Math.floor((H - y0 - 1.5) / fh), d = 0.13, t = 0.28;
+      const sc = b.wall.clone().multiplyScalar(b.st === ST.BRK ? 1.25 : 1.08); const pinf = [seed, ST.PAR, 0, 1];
+      for (const e of edges) {
+        if (!e || e.L < 3) continue;
+        const ax = e.a[0] + e.nx * d, az = e.a[1] + e.nz * d, qx = e.q[0] + e.nx * d, qz = e.q[1] + e.nz * d;
+        for (let k = 1; k <= nF; k++) {
+          const y = y0 + k * fh - 0.02; if (e.front && y < 6) continue;
+          gb.face([[ax, y, az, e.u0, y], [qx, y, qz, e.u0 + e.L, y], [qx, y + t, qz, e.u0 + e.L, y + t], [ax, y + t, az, e.u0, y + t]], [e.nx, 0, e.nz], pinf, sc, white);
+          gb.face([[e.a[0], y + t, e.a[1], 0, 0], [e.q[0], y + t, e.q[1], 0, 0], [qx, y + t, qz, 0, 0], [ax, y + t, az, 0, 0]], [0, 1, 0], pinf, sc, white);
+          gb.face([[e.a[0], y, e.a[1], 0, 0], [ax, y, az, 0, 0], [qx, y, qz, 0, 0], [e.q[0], y, e.q[1], 0, 0]], [0, -1, 0], pinf, sc, white);
+        }
+      }
+    }
     // balconies (instanced later)
     if (b.balc && H > 12) {
       const fh = b.fh; const nF = Math.floor((H - y0 - 1.5) / fh);

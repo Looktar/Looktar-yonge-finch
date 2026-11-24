@@ -6,6 +6,7 @@ import { A, N } from './data_a.js';
 import { X } from './data_x.js';
 import { buildCity } from './buildings.js';
 import { groundMaterial, ribbonMaterial, tex as tex2 } from './pbr.js';
+import { carGeoms, wheelGeoms } from './cars.js';
 import { addStreetscape, cityTrees, parseX, nearestRoad } from './street.js';
 
 // ---------- helpers ----------
@@ -517,40 +518,45 @@ export function buildWorld(scene, tex, quality) {
   for (let i = 0; i < 6; i++) tryCar(XING[0] + (r() - 0.5) * 26, XING[1] + (r() - 0.5) * 26, r() * Math.PI * 2);
   const bysd = cars.slice().sort((a, b) => Math.hypot(a.x - XING[0], a.z - XING[1]) - Math.hypot(b.x - XING[0], b.z - XING[1]));
   for (let i = 0; i < Math.min(4, bysd.length); i += 1) if (i !== 1) bysd[i].burn = true;
-  // body = side profile extruded across the width with rounded edges; greenhouse = a narrower glass profile
-  // with the roof panel on top. Two shapes cover the street: sedans and SUVs (front is +z).
-  const extr = (pts, w, bev) => { const sh = new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y))); const g = new THREE.ExtrudeGeometry(sh, { depth: w - bev * 2, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 1 }); g.rotateY(-Math.PI / 2); g.translate(w / 2 - bev, 0, 0); return g.index ? g.toNonIndexed() : g; };
-  const CARS = {
-    sedan: { body: [[-2.25, 0.32], [2.25, 0.32], [2.3, 0.6], [2.18, 0.83], [1.15, 0.98], [-1.3, 1.0], [-2.22, 0.96], [-2.3, 0.58]], glass: [[1.12, 0.97], [0.4, 1.4], [-0.8, 1.4], [-1.32, 0.99]], roof: [[0.38, 1.39], [-0.78, 1.39], [-0.74, 1.45], [0.32, 1.45]], w: 1.82, gw: 1.5 },
-    suv: { body: [[-2.3, 0.4], [2.3, 0.4], [2.36, 0.75], [2.2, 1.06], [1.4, 1.2], [-2.3, 1.22], [-2.36, 0.72]], glass: [[1.38, 1.19], [0.78, 1.72], [-2.22, 1.72], [-2.28, 1.21]], roof: [[0.76, 1.71], [-2.2, 1.71], [-2.18, 1.79], [0.7, 1.79]], w: 1.92, gw: 1.72 },
-  };
-  for (const k in CARS) { const C = CARS[k]; C.bodyG = mergeGeometries([extr(C.body, C.w, 0.08), extr(C.roof, C.gw - 0.04, 0.03)]); C.glassG = extr(C.glass, C.gw, 0.03); }
-  const bodyG = CARS.sedan.bodyG, cabG = CARS.sedan.glassG;
-  const wheelG = mergeGeometries([[-0.86, 1.45], [0.86, 1.45], [-0.86, -1.4], [0.86, -1.4]].map(([x, z]) => new THREE.CylinderGeometry(0.34, 0.34, 0.24, 10).rotateZ(Math.PI / 2).translate(x, 0.34, z).toNonIndexed()));
-  const tailG = mergeGeometries([new THREE.BoxGeometry(0.32, 0.12, 0.05).translate(-0.62, 0.84, -2.37), new THREE.BoxGeometry(0.32, 0.12, 0.05).translate(0.62, 0.84, -2.37), new THREE.BoxGeometry(0.3, 0.12, 0.05).translate(-0.62, 0.78, 2.37), new THREE.BoxGeometry(0.3, 0.12, 0.05).translate(0.62, 0.78, 2.37)].map(g => g.toNonIndexed()));
-  const bodyMat = new THREE.MeshPhysicalMaterial({ roughness: 0.45, metalness: 0.25, clearcoat: 1.0, clearcoatRoughness: 0.08, envMapIntensity: 1.0 }); // painted metal under clear coat
-  const glassMat = new THREE.MeshStandardMaterial({ color: 0x07090c, roughness: 0.05, metalness: 0.4, envMapIntensity: 1.4 });
-  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0c0c0c, roughness: 0.8 });
+  // lofted procedural cars (src/cars.js): painted shell, glass, black trim + mirrors, lights; alloy wheels
+  const KIND = ['sedan', 'suv', 'hatch'].map(k => ({ k, g: carGeoms(k) }));
+  const bodyMat = new THREE.MeshPhysicalMaterial({ roughness: 0.42, metalness: 0.3, clearcoat: 1.0, clearcoatRoughness: 0.07, envMapIntensity: 1.0 }); // painted metal under clear coat
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x141b21, roughness: 0.04, metalness: 0.15, envMapIntensity: 1.6 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.75 });
+  const headMat = new THREE.MeshStandardMaterial({ color: 0xdfe6ee, emissive: 0xfff2dc, emissiveIntensity: 0.25, roughness: 0.2 });
   const hazMat = new THREE.MeshStandardMaterial({ color: 0x331a00, emissive: 0xff8a10, emissiveIntensity: 0 });
-  const tailMat = new THREE.MeshStandardMaterial({ color: 0x220202, emissive: 0x500000, emissiveIntensity: 1 });
-  cars.forEach(c => { c.kind = r() < 0.4 ? 'suv' : 'sedan'; });
-  const nS = cars.filter(c => c.kind === 'suv').length;
-  const bodies = new THREE.InstancedMesh(bodyG, bodyMat, Math.max(1, cars.length - nS)), cabs = new THREE.InstancedMesh(cabG, glassMat, Math.max(1, cars.length - nS)), wheels = new THREE.InstancedMesh(wheelG, wheelMat, cars.length);
-  const bodiesS = new THREE.InstancedMesh(CARS.suv.bodyG, bodyMat, Math.max(1, nS)), cabsS = new THREE.InstancedMesh(CARS.suv.glassG, glassMat, Math.max(1, nS));
-  let iSed = 0, iSuv = 0; bodies.count = cars.length - nS; cabs.count = bodies.count; bodiesS.count = cabsS.count = nS;
-  const hz = cars.filter(c => c.haz && !c.burn), tl = cars.filter(c => !c.haz || c.burn);
-  const hazI = new THREE.InstancedMesh(tailG, hazMat, Math.max(1, hz.length)), tailI = new THREE.InstancedMesh(tailG, tailMat, Math.max(1, tl.length));
-  let ih2 = 0, it2 = 0; const cc = new THREE.Color();
-  cars.forEach((c, i) => {
-    e.set(0, c.a, c.burn ? (r() - 0.5) * 0.05 : 0); q.setFromEuler(e); m4.compose(v.set(c.x, c.burn ? -0.18 : 0, c.z), q, s1);
-    wheels.setMatrixAt(i, m4); cc.set(c.burn ? '#0d0b0a' : c.c);
-    if (c.kind === 'suv') { bodiesS.setMatrixAt(iSuv, m4); cabsS.setMatrixAt(iSuv, m4); bodiesS.setColorAt(iSuv++, cc); } else { bodies.setMatrixAt(iSed, m4); cabs.setMatrixAt(iSed, m4); bodies.setColorAt(iSed++, cc); }
-    if (c.haz && !c.burn) hazI.setMatrixAt(ih2++, m4); else tailI.setMatrixAt(it2++, m4);
-    const ca = Math.cos(c.a), sa = Math.sin(c.a); const hw = 1.0, hl = 2.35;
-    const corner = (dx, dz) => [c.x + dx * ca + dz * sa, c.z - dx * sa + dz * ca];
-    col.addPoly([corner(-hw, -hl), corner(hw, -hl), corner(hw, hl), corner(-hw, hl)]);
+  const tailMat = new THREE.MeshStandardMaterial({ color: 0x3a0505, emissive: 0x700000, emissiveIntensity: 1 });
+  const tyreMat = new THREE.MeshStandardMaterial({ color: 0x0e0e0e, roughness: 0.85 }), rimMat = new THREE.MeshStandardMaterial({ color: 0xa9adb2, roughness: 0.3, metalness: 0.85 });
+  cars.forEach(c => { const k = r(); c.kind = k < 0.45 ? 0 : k < 0.8 ? 1 : 2; });
+  const wg = wheelGeoms(0.34);
+  const tyres = new THREE.InstancedMesh(wg.tyre, tyreMat, cars.length * 4), rims = new THREE.InstancedMesh(wg.rim, rimMat, cars.length * 4);
+  const meshes = [tyres, rims];
+  const hz = cars.filter(c => c.haz && !c.burn).length;
+  const hazI = []; // collected per kind so main.js can flash them through hazMat
+  const cc = new THREE.Color(), wm = new THREE.Matrix4(), ws = new THREE.Vector3(), wq = new THREE.Quaternion(), wv = new THREE.Vector3();
+  let iw = 0;
+  KIND.forEach((K, ki) => {
+    const mine = cars.filter(c => c.kind === ki); if (!mine.length) return;
+    const n = mine.length, nh = mine.filter(c => c.haz && !c.burn).length;
+    const body = new THREE.InstancedMesh(K.g.body, bodyMat, n), glass = new THREE.InstancedMesh(K.g.glass, glassMat, n), trim = new THREE.InstancedMesh(K.g.trim, trimMat, n), head = new THREE.InstancedMesh(K.g.head, headMat, n);
+    const tail = new THREE.InstancedMesh(K.g.tail, tailMat, Math.max(1, n - nh)), haz = new THREE.InstancedMesh(K.g.tail, hazMat, Math.max(1, nh));
+    let it = 0, ih = 0;
+    mine.forEach((c, i) => {
+      e.set(0, c.a, c.burn ? (r() - 0.5) * 0.05 : 0); q.setFromEuler(e); m4.compose(v.set(c.x, c.burn ? -0.18 : 0, c.z), q, s1);
+      body.setMatrixAt(i, m4); glass.setMatrixAt(i, m4); trim.setMatrixAt(i, m4); head.setMatrixAt(i, m4);
+      body.setColorAt(i, cc.set(c.burn ? '#0d0b0a' : c.c));
+      if (c.haz && !c.burn) haz.setMatrixAt(ih++, m4); else tail.setMatrixAt(it++, m4);
+      const sc = K.g.tyre / 0.34;
+      for (const [wx, wz] of K.g.wheels) { wm.compose(wv.set(wx, K.g.tyre, wz), wq.identity(), ws.set(1, sc, sc)); wm.premultiply(m4); tyres.setMatrixAt(iw, wm); rims.setMatrixAt(iw++, wm); }
+      const ca = Math.cos(c.a), sa = Math.sin(c.a); const hw = K.g.wid / 2 + 0.05, hl = K.g.len / 2;
+      const corner = (dx, dz) => [c.x + dx * ca + dz * sa, c.z - dx * sa + dz * ca];
+      col.addPoly([corner(-hw, -hl), corner(hw, -hl), corner(hw, hl), corner(-hw, hl)]);
+    });
+    tail.count = it; haz.count = ih; hazI.push(haz);
+    meshes.push(body, glass, trim, head, tail, haz);
   });
-  for (const m of [bodies, cabs, bodiesS, cabsS, wheels, hazI, tailI]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; m.frustumCulled = false; scene.add(m); }
+  for (const m of meshes) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; scene.add(m); }
+  void hz;
   const fires = cars.filter(c => c.burn).map(c => ({ x: c.x, z: c.z }));
 
   // ---- trees: City of Toronto street trees (real) + OSM trees + yard fill (approximate) ----
