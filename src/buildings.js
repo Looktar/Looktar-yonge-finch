@@ -282,6 +282,9 @@ export function facadeMaterial() {
           float row = F.y / 0.2; float blk = pulse(row, 0.0, 0.94, dF.y / 0.2) * pulse(F.x / 0.4 + mod(floor(row), 2.0) * 0.5, 0.0, 0.97, dF.x / 0.4);
           alb *= mix(0.82, 1.0, mix(blk, 0.93, smoothstep(0.02, 0.06, dF.y)));
           if (front < 0.5) { float d = pulse(F.x / 14.0, 0.45, 0.52, dF.x / 14.0) * step(F.y, 2.2); alb = mix(alb, vec3(0.2, 0.22, 0.25), d); }
+          // second-floor offices over the shops (dentists, tutors, travel agents): a row of punched windows
+          bw = 3.2; g = vec2(F.x / bw, (F.y - 4.9) / 2.6); dg = dF / vec2(bw, 2.6); cell = floor(g);
+          win = pulse(g.x, 0.18, 0.82, dg.x) * pulse(g.y, 0.08, 0.86, dg.y) * step(4.9, F.y) * step(F.y, 7.5) * (1.0 - blank); fh = 2.6; litF = 0.4;
         } else if (st == 11) { // ---- rooftop mechanical penthouse: louvres ----
           float lv = pulse(F.y / 0.14, 0.0, 0.5, dF.y / 0.14) * step(0.5, F.y) * step(F.y, fh - 0.6);
           alb = base * (1.0 - 0.35 * lv);
