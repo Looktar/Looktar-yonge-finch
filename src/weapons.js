@@ -139,7 +139,7 @@ export function buildRifle() {
   // weapon light on the right side of the handguard: body, knurled bezel, lens
   { const lx = 0.032, lv = 0.008, l0 = 0.39, l1 = 0.48; const parts = [cylZ(0.0115, 0.0115, l0, l1, lv, 18, lx), cylZ(0.0135, 0.0135, l1, l1 + 0.022, lv, 18, lx), boxU(0.01, 0.018, l0 + 0.02, l0 + 0.06, lv, lx - 0.012, 0.002)];
     for (let k = 0; k < 10; k++) parts.push(cylZ(0.0142, 0.0142, l1 + 0.002 + k * 0.002, l1 + 0.003 + k * 0.002, lv, 18, lx)); g.add(M(parts, m.metal));
-    const lens = new THREE.CircleGeometry(0.011, 18); lens.translate(lx, lv, -(l1 + 0.0225)); g.add(new THREE.Mesh(lens, new THREE.MeshStandardMaterial({ color: 0xdde6ea, roughness: 0.05, metalness: 0.2, emissive: 0x8899aa, emissiveIntensity: 0.15 }))); }
+    const lens = new THREE.CircleGeometry(0.011, 18); lens.translate(lx, lv, -(l1 + 0.0225)); g.add(new THREE.Mesh(lens, new THREE.MeshStandardMaterial({ color: 0x9aa4a8, roughness: 0.35, metalness: 0.1 }))); }
   // laser-etched markings on the lower receiver (both sides)
   { const mk = markTex(); for (const sx of [1, -1]) { const pl = new THREE.PlaneGeometry(0.11, 0.022); pl.rotateY(sx * Math.PI / 2); pl.translate(sx * 0.0125, -0.012, -0.12); g.add(new THREE.Mesh(pl, new THREE.MeshStandardMaterial({ map: mk, transparent: true, roughness: 0.6, metalness: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }))); } }
   RET = RET || reticleTex();
@@ -151,7 +151,7 @@ export function buildRifle() {
   g.add(forearm([0.02, -0.13, 0.03], [0.1, -0.26, 0.26]));
   g.add(forearm([-0.05, -0.03, -0.29], [-0.2, -0.24, -0.02]));
   g.traverse(o => o.frustumCulled = false);
-  g.userData = { muzzle: new THREE.Vector3(0, 0.016, -0.67), eject: new THREE.Vector3(0.02, 0.03, -0.1), sight: new THREE.Vector3(0, dotV, -0.12), mag, hip: new THREE.Vector3(0.2, -0.16, -0.5), hipYaw: 0.3, hipRoll: 0.07, adsZ: -0.2, fov: 52 }; // canted to show the rail and sight side-on, like Saltline's carbine
+  g.userData = { muzzle: new THREE.Vector3(0, 0.016, -0.67), eject: new THREE.Vector3(0.02, 0.03, -0.1), sight: new THREE.Vector3(0, dotV, -0.12), mag, hip: new THREE.Vector3(0.235, -0.155, -0.5), hipYaw: 0.42, hipRoll: 0.1, adsZ: -0.2, fov: 52 }; // canted to show the rail and sight side-on, like Saltline's carbine
   return g;
 }
 
