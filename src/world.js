@@ -168,15 +168,16 @@ function buildRoads(roads, tex) {
   // ---- pavement markings (Ontario practice): no edge lines on curbed arterials; double yellow centre line on two-way
   // roads; white 3 m / 6 m lane lines; everything stops 6 m short of a crossing arterial, where a white stop bar goes
   // across the approach lanes with straight / left-turn arrows behind it
-  const MS = 0.5, MN = Math.ceil(EXT * 2 / MS), own = new Int16Array(MN * MN).fill(-1);
+  // two rasters: arterials (pri/sec) and everything with lane markings; an arterial only stops for another arterial
+  const MS = 0.5, MN = Math.ceil(EXT * 2 / MS), own = new Int16Array(MN * MN).fill(-1), ownA = new Int16Array(MN * MN).fill(-1);
   // one id per street: OSM splits a street into many ways, and its own pieces must not read as a crossing road
   const gid = new Map(); const streetId = r => { const k = r.name ? r.name.replace(/ (East|West|North|South)$/, '') : ('#' + roads.indexOf(r)); if (!gid.has(k)) gid.set(k, gid.size); return gid.get(k); };
   roads.forEach(r0 => {
     if (!RW[r0.t]) return; const r = r0, id = streetId(r0); const h = r.w / 2 + 0.4;
     for (let i = 0; i < r.p.length - 1; i++) { const a = r.p[i], b = r.p[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
-      for (let t = 0; t <= L; t += 0.25) for (let o = -h; o <= h; o += 0.25) { const ix = Math.floor((a[0] + ux * t - uz * o + EXT) / MS), iz = Math.floor((a[1] + uz * t + ux * o + EXT) / MS); if (ix < 0 || iz < 0 || ix >= MN || iz >= MN) continue; const k = ix + iz * MN; own[k] = own[k] === -1 || own[k] === id ? id : -2; } }
+      for (let t = 0; t <= L; t += 0.25) for (let o = -h; o <= h; o += 0.25) { const ix = Math.floor((a[0] + ux * t - uz * o + EXT) / MS), iz = Math.floor((a[1] + uz * t + ux * o + EXT) / MS); if (ix < 0 || iz < 0 || ix >= MN || iz >= MN) continue; const k = ix + iz * MN; own[k] = own[k] === -1 || own[k] === id ? id : -2; if (r.t === 'pri' || r.t === 'sec') ownA[k] = ownA[k] === -1 || ownA[k] === id ? id : -2; } }
   });
-  const foreign = (x, z, id) => { const ix = Math.floor((x + EXT) / MS), iz = Math.floor((z + EXT) / MS); if (ix < 0 || iz < 0 || ix >= MN || iz >= MN) return false; const k = own[ix + iz * MN]; return k === -2 || (k >= 0 && k !== id); };
+  const foreign = (x, z, id, art) => { const ix = Math.floor((x + EXT) / MS), iz = Math.floor((z + EXT) / MS); if (ix < 0 || iz < 0 || ix >= MN || iz >= MN) return false; const k = (art ? ownA : own)[ix + iz * MN]; return k === -2 || (k >= 0 && k !== id); };
   const arrows = { pos: [], uv: [] };
   const quadOut = (out, A, B, C, D, uvs, y) => { const P = [A, B, C, A, C, D]; const U = uvs ? [uvs[0], uvs[1], uvs[2], uvs[0], uvs[2], uvs[3]] : null; P.forEach((q, j) => { out.pos.push(q[0], y, q[1]); out.uv.push(...(U ? U[j] : [0, 0])); }); };
   roads.forEach(r => {
@@ -187,7 +188,8 @@ function buildRoads(roads, tex) {
     for (let i = 0; i < r.p.length - 1; i++) { const a = r.p[i], b = r.p[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.01) continue; const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
       for (let t = 0; t < L; t += 0.5) S.push({ x: a[0] + ux * t, z: a[1] + uz * t, ux, uz, s: acc + t }); acc += L; }
     if (S.length < 2) return;
-    const clearAt = (q, o) => { const x = q.x - q.uz * o, z = q.z + q.ux * o; return !foreign(x, z, id) && !foreign(x + q.ux * 6, z + q.uz * 6, id) && !foreign(x - q.ux * 6, z - q.uz * 6, id); };
+    const art = r.t === 'pri' || r.t === 'sec';
+    const clearAt = (q, o) => { const x = q.x - q.uz * o, z = q.z + q.ux * o; return !foreign(x, z, id, art) && !foreign(x + q.ux * 6, z + q.uz * 6, id, art) && !foreign(x - q.ux * 6, z - q.uz * 6, id, art); };
     const line = (o, width, out, dash, y) => {
       for (let i = 0; i < S.length - 1; i++) {
         const q = S[i], q2 = S[i + 1]; if (!clearAt(q, o) || !clearAt(q2, o)) continue;
