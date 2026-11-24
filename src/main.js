@@ -18,6 +18,8 @@ import { buildRifle, buildShotgun, buildPistol, flashTextures, makeFlash, casing
 
 const $ = id => document.getElementById(id);
 const QUAL = { high: { pr: 1.5, bloom: true, shadow: 4096, aa: true, ao: 'full', lights: 6, refl: 0.6 }, mid: { pr: 1, bloom: true, shadow: 2048, aa: true, ao: 'half', lights: 4, refl: 0.45 }, low: { pr: 0.75, bloom: false, shadow: 0, aa: false, ao: false, lights: 2, refl: 0 } };
+// diagnosis switches: ?nowet or #nowet (artifact links only carry a plain #name); #safe turns all of them off
+const QS = new URLSearchParams(location.search); const HS = location.hash.slice(1); const OFF = k => QS.has('no' + k) || HS === 'no' + k || HS === 'safe';
 const TOUCH = isTouch(); if (TOUCH) { document.body.classList.add('touch'); QUAL.low.pr = 1; QUAL.mid.pr = 1; }
 let Q = TOUCH ? QUAL.low : QUAL.mid; if (TOUCH) $('q-low').checked = true;
 try { const s = localStorage.getItem('yf_q'); if (s && QUAL[s]) { Q = QUAL[s]; $('q-' + s).checked = true; } } catch (e) { }
@@ -127,10 +129,15 @@ const basePass = new RenderPass(scene, camera); composer.addPass(basePass);
 const aoPass = new N8AOPass(scene, camera, innerWidth, innerHeight);
 Object.assign(aoPass.configuration, { aoRadius: 2.2, distanceFalloff: 1.0, intensity: 2.6, color: new THREE.Color(0x0b0d16), gammaCorrection: false, halfRes: true, screenSpaceRadius: false });
 aoPass.setQualityMode('Medium'); composer.addPass(aoPass);
+// a stray NaN / Inf from any shader on some GPUs would be smeared over the whole frame by bloom (black screen):
+// scrub them right after the scene render
+const sanitize = new ShaderPass({ uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); bvec4 bad = bvec4(c.r != c.r || c.r > 1e5, c.g != c.g || c.g > 1e5, c.b != c.b || c.b > 1e5, false); c.rgb = mix(clamp(c.rgb, 0.0, 6e4), vec3(0.0), vec3(bad.rgb)); gl_FragColor = vec4(max(c.rgb, 0.0), 1.0); }' });
+composer.addPass(sanitize);
 let vmPass = null; // added once vmScene exists
 vmPass = new RenderPass(vmScene, vmCam); vmPass.clear = false; vmPass.clearDepth = true; composer.addPass(vmPass);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.42, 0.5, 0.95); composer.addPass(bloom);
-const finalPass = makeFinalPass(); composer.addPass(finalPass); // Saltline-style camera pass (tone map, look, shafts, grain) instead of OutputPass
+const finalPass = makeFinalPass(); composer.addPass(finalPass); const outPass = new OutputPass(); outPass.enabled = false; composer.addPass(outPass); // Saltline-style camera pass (tone map, look, shafts, grain) instead of OutputPass
 { const r0 = finalPass.render.bind(finalPass); let tPrev = performance.now(); finalPass.render = (r, wb, rb, dt, mask) => { const t = performance.now(); finalPass.update(r, rb.texture, Math.min(0.1, (t - tPrev) / 1000), camera, SUN); tPrev = t; r0(r, wb, rb, dt, mask); }; }
 const smaa = new SMAAPass(innerWidth, innerHeight); composer.addPass(smaa);
 const grade = new ShaderPass({
@@ -148,7 +155,8 @@ composer.addPass(grade);
 
 function applyQuality() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); composer.setSize(innerWidth, innerHeight); if (typeof finalPass !== 'undefined') { const pr = Math.min(devicePixelRatio, Q.pr); finalPass.setSize(innerWidth * pr, innerHeight * pr); }
-  bloom.enabled = Q.bloom; lampLights.forEach((l, i) => l.visible = i < Q.lights);
+  bloom.enabled = Q.bloom; if (typeof finalPass !== 'undefined') finalPass.enabled = !OFF('post'); if (typeof outPass !== 'undefined') outPass.enabled = OFF('post'); lampLights.forEach((l, i) => l.visible = i < Q.lights);
+  if (OFF('ao')) Q.ao = false; if (OFF('wet')) Q.refl = 0; if (OFF('bloom')) Q.bloom = false;
   aoPass.enabled = !!Q.ao; basePass.enabled = !Q.ao; aoPass.configuration.halfRes = Q.ao !== 'full'; smaa.enabled = Q.aa;
   if (typeof mirror !== 'undefined') { mirror.visible = Q.refl > 0; WET.uReflOn.value = Q.refl > 0 ? 1 : 0; const pr = Math.min(devicePixelRatio, Q.pr); mirror.getRenderTarget().setSize(Math.max(64, Math.round(innerWidth * pr * Q.refl)), Math.max(64, Math.round(innerHeight * pr * Q.refl))); }
   if (typeof sun !== 'undefined') { const on = Q.shadow > 0; if (sun.castShadow !== on || (on && sun.shadow.mapSize.x !== Q.shadow)) { sun.castShadow = on; if (on) { sun.shadow.mapSize.set(Q.shadow, Q.shadow); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } } scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); } }
@@ -570,10 +578,13 @@ function frame(now) {
   grade.uniforms.uTime.value = t; grade.uniforms.uDmg.value = S.state === 'play' ? Math.max(S.dmgT, S.hp < 30 ? 0.35 + Math.sin(t * 6) * 0.1 : 0) : 0; grade.uniforms.uLow.value = S.state === 'play' ? Math.max(0, (40 - S.hp) / 40) : 0;
   if (S.state === 'menu') updateZombies(dt * 0.6);
   vmRoot.visible = S.state === 'play' || S.state === 'pause'; vmPass.enabled = vmRoot.visible;
-  composer.render();
+  try { composer.render(); } catch (err) {
+    console.error(err); renderFails = (renderFails || 0) + 1;
+    if (renderFails === 3) { Q.refl = 0; Q.ao = false; finalPass.enabled = false; outPass.enabled = true; applyQuality(); const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99;color:#fb8;font:12px monospace;background:#000a;padding:4px 8px'; d.textContent = '渲染出错，已切换到简化画面：' + String(err && err.message || err).slice(0, 120); document.body.appendChild(d); }
+  }
   fpsN++; if (now - fpsT > 1000) { $('fps').textContent = fpsN + ' FPS'; fpsN = 0; fpsT = now; }
 }
-let fpsN = 0, fpsT = 0;
+let fpsN = 0, fpsT = 0, renderFails = 0;
 computeFlow(START[0], START[1]);
 // a few shamblers for the title screen
 

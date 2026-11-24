@@ -33,7 +33,7 @@ export function makeFinalPass() {
         return c;
       }
       void main(){
-        vec2 uv = vUv; vec3 c = shade(uv);
+        vec2 uv = vUv; vec3 c = shade(uv); c = (c == c) ? min(c, vec3(6e4)) : vec3(0.0);
         // sun shafts: march toward the sun, gathering only the very bright sky
         if (uSun.z > 0.001 && uShafts > 0.0) {
           vec2 dv = (uSun.xy - uv) / 18.0; vec2 p = uv; float acc = 0.0, w = 1.0;
@@ -61,20 +61,20 @@ export function makeFinalPass() {
       }`,
   });
   // auto exposure: read a 16x16 copy of the HDR frame every few frames and ease toward key / average luminance
-  const small = new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType, depthBuffer: false });
-  const copy = new THREE.ShaderMaterial({ uniforms: { t: { value: null } }, vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader: 'uniform sampler2D t; varying vec2 v; void main(){ gl_FragColor = texture2D(t, v); }', depthTest: false, depthWrite: false });
+  const small = new THREE.WebGLRenderTarget(16, 16, { type: THREE.UnsignedByteType, depthBuffer: false });
+  const copy = new THREE.ShaderMaterial({ uniforms: { t: { value: null } }, vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader: 'uniform sampler2D t; varying vec2 v; void main(){ vec3 c = texture2D(t, v).rgb; c = (c == c) ? c : vec3(0.0); gl_FragColor = vec4(clamp(c / 8.0, 0.0, 1.0), 1.0); }', depthTest: false, depthWrite: false });
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), copy); const qs = new THREE.Scene(); qs.add(quad); const qc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  const buf = new Uint16Array(16 * 16 * 4); let n = 0, exp = 1, auto = true;
-  const half = h => { const s = (h & 0x8000) ? -1 : 1, e = (h >> 10) & 31, f = h & 1023; return e === 0 ? s * 6.1e-5 * (f / 1024) : e === 31 ? 0 : s * Math.pow(2, e - 15) * (1 + f / 1024); };
+  const buf = new Uint8Array(16 * 16 * 4); let n = 0, exp = 1, auto = true;
   const sv = new THREE.Vector3();
   pass.update = (renderer, readTex, dt, camera, sunDir) => {
     const U = pass.uniforms; U.uTime.value += dt;
     if (auto && (n++ % 15) === 0 && readTex) {
       copy.uniforms.t.value = readTex; const prev = renderer.getRenderTarget(); renderer.setRenderTarget(small); renderer.render(qs, qc); renderer.readRenderTargetPixels(small, 0, 0, 16, 16, buf); renderer.setRenderTarget(prev);
-      let s = 0; for (let i = 0; i < buf.length; i += 4) { const l = 0.2126 * half(buf[i]) + 0.7152 * half(buf[i + 1]) + 0.0722 * half(buf[i + 2]); s += Math.log(1e-4 + Math.max(0, l)); }
+      let s = 0; for (let i = 0; i < buf.length; i += 4) { const l = (0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2]) / 255 * 8; s += Math.log(1e-4 + Math.max(0, l)); }
       pass.avg = Math.exp(s / 256);
     }
-    if (pass.avg) { const target = THREE.MathUtils.clamp(LOOK.key / pass.avg, LOOK.minExp, LOOK.maxExp); exp += (target - exp) * (1 - Math.exp(-dt * 15 / LOOK.tau / 15)); }
+    if (pass.avg > 1e-3 && isFinite(pass.avg)) { const target = THREE.MathUtils.clamp(LOOK.key / pass.avg, LOOK.minExp, LOOK.maxExp); exp += (target - exp) * (1 - Math.exp(-dt / LOOK.tau)); }
+    if (!isFinite(exp)) exp = 1;
     U.toneMappingExposure.value = exp;
     // sun position on screen (z = visibility)
     sv.copy(camera.position).addScaledVector(sunDir, 1000).project(camera);
