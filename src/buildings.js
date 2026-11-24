@@ -102,7 +102,9 @@ function assignStyle(b, r) {
     b.fh = 3.8; return;
   }
   if (['re', 'co', 'sh'].includes(b.t) || (b.t === 'ye' && b.H < 10 && b.A > 90)) {
-    b.st = ST.RET; b.fh = 4.6; b.wall = C(pick(r, r() < 0.5 ? PALS.stucco : PALS.buff)); b.acc = C('#1a1d21'); b.retail = true; return;
+    b.st = ST.RET; b.fh = 4.6; b.wall = C(pick(r, r() < 0.5 ? PALS.stucco : PALS.buff)); b.acc = C('#1a1d21'); b.retail = true;
+    if (b.lv && b.lv <= 2 && !b.part) b.H = Math.min(b.H, b.lv * 3.6 + 1.4); // one / two-storey strip retail (Street View), the massing average includes rooftop units
+    return;
   }
   if (b.t === 'ye' || b.H < 4.5) { b.st = ST.SLAB; b.wall = C(pick(r, PALS.grey)); return; }
   // residential & mixed

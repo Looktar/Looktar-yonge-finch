@@ -154,7 +154,8 @@ export function addStreetscape(scene, ctx) {
           for (let s = 6 + r() * 20; s < L - 4; s += 28 + r() * 30) for (const side of [-1, 1]) {
             if (r() < 0.45) continue;
             const off = (rd.w || 12) / 2 + 1.1; const x = a[0] + tx * s - tz * off * side, z = a[1] + tz * s + tx * off * side;
-            if (!inPlay(x, z, 0) || col.isBlocked(x, z) || spots.some(o => (o[0] - x) ** 2 + (o[1] - z) ** 2 < 36)) continue;
+            const ox = x - tz * 2.2 * side, oz = z + tx * 2.2 * side; // a little further out: another carriageway there means this is a median
+            if (!inPlay(x, z, 0) || col.isBlocked(x, z) || onRoad(x, z) || onRoad(ox, oz) || spots.some(o => (o[0] - x) ** 2 + (o[1] - z) ** 2 < 36)) continue;
             spots.push([x, z, Math.atan2(tx, tz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), r()]);
           }
         }
