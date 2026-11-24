@@ -209,7 +209,7 @@ export function facadeMaterial() {
         vec2 F = vFac; vec2 dF = fwidth(F) + 1e-4;
         vec3 base = diffuseColor.rgb; vec3 alb = base; vec3 tint = vAcc;
         float rgh = 0.86, mtl = 0.0; vec3 em = vec3(0.0);
-        float win = 0.0; float litF = 0.22; vec3 lc = vec3(1.0, 0.72, 0.45); vec2 cell = vec2(0.0); float far = 0.0;
+        float win = 0.0; float litF = 0.22; vec3 lc = vec3(1.0, 0.66, 0.36); vec2 cell = vec2(0.0); float far = 0.0;
         float bw = 1.5; vec2 g, dg;
         float noise = h21(floor(F * vec2(0.9, 0.7)) + seed);
         if (st <= 2) { // ---- houses ----
@@ -320,6 +320,7 @@ export function facadeMaterial() {
         bool shop = front > 0.5 && F.y < sfH && st != 9;
         float hs = h21(cell + seed * 1.37); float hs2 = h21(cell.yx * 1.91 + seed * 0.37);
         float lit = step(1.0 - litF, hs);
+        if (!shop) lc = mix(lc, vec3(0.82, 0.88, 1.0), step(0.78, hs2)); // some rooms lit by cool LED / TV light
         float detail = shop ? smoothstep(0.35, 1.0, max(dF.x, dF.y) / 2.0) : smoothstep(0.35, 1.0, max(dg.x, dg.y));
         float tinted = (st == 4 || st == 6 || st == 5 || st == 16) ? 1.0 : 0.0;
         vec3 room = vec3(0.0);
@@ -363,7 +364,7 @@ export function facadeMaterial() {
         alb = mix(alb, tint * mix(0.12, 1.25, tinted * (st == 6 ? 1.0 : 0.6)), win); // reflective coatings: the metal colour tints the reflection
         rgh = mix(rgh, 0.03 + 0.04 * hs2 * (1.0 - detail), win);
         mtl = mix(mtl, tinted * (st == 6 ? 0.85 : 0.55), win);
-        em = win * room * trans * (shop ? 0.42 : st == 5 || st == 6 ? 0.16 : 0.38);
+        em = win * room * trans * (shop ? 0.42 : st == 5 || st == 6 ? 0.22 : 0.85);
         gGlass = win; gMtl = mtl; gRgh = rgh; gEm = em; gCell = cell + seed; gDet = detail;
         diffuseColor.rgb = alb;
       }`)

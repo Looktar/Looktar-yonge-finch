@@ -441,7 +441,8 @@ export function buildWorld(scene, tex, quality) {
   }
 
   // ---- cars ----
-  const cars = []; const carColors = ['#5a1414', '#1d2a3a', '#2b2b2b', '#6b6b6b', '#d0d0d0', '#16301f', '#3c2b1a', '#7a5a10', '#101010', '#8a8f96'];
+  const cars = []; // the GTA's real mix: mostly white, silver, grey and black, a few blue and red
+  const carColors = ['#e8e8e6', '#dcdcda', '#f2f2f0', '#b8bcc0', '#a7abb0', '#8a8f96', '#6b6e72', '#4a4d52', '#1b1c1e', '#141516', '#1d2a44', '#7a1515', '#2e3d55', '#c9c2b2'];
   const tryCar = (x, z, ang) => { if (Math.hypot(x - PLAY_C[0], z - PLAY_C[1]) > PLAY_R - 10) return; if (cars.some(c => Math.hypot(c.x - x, c.z - z) < 6.5)) return; if (col.isBlocked(x, z) || Math.hypot(x - START[0], z - START[1]) < 9) return; cars.push({ x, z, a: ang, c: carColors[Math.floor(r() * carColors.length)], burn: false, haz: r() < 0.22 }); };
   placeAlong(roads, 22, rd => rd.w, rd => ['pri', 'sec', 'ter', 'res'].includes(rd.t), (x, z, nx, nz, ux, uz, rd) => {
     const dens = rd.t === 'pri' ? 0.55 : rd.t === 'sec' ? 0.45 : 0.18; if (r() > dens) return;
@@ -464,7 +465,7 @@ export function buildWorld(scene, tex, quality) {
   const bodyG = CARS.sedan.bodyG, cabG = CARS.sedan.glassG;
   const wheelG = mergeGeometries([[-0.86, 1.45], [0.86, 1.45], [-0.86, -1.4], [0.86, -1.4]].map(([x, z]) => new THREE.CylinderGeometry(0.34, 0.34, 0.24, 10).rotateZ(Math.PI / 2).translate(x, 0.34, z).toNonIndexed()));
   const tailG = mergeGeometries([new THREE.BoxGeometry(0.32, 0.12, 0.05).translate(-0.62, 0.84, -2.37), new THREE.BoxGeometry(0.32, 0.12, 0.05).translate(0.62, 0.84, -2.37), new THREE.BoxGeometry(0.3, 0.12, 0.05).translate(-0.62, 0.78, 2.37), new THREE.BoxGeometry(0.3, 0.12, 0.05).translate(0.62, 0.78, 2.37)].map(g => g.toNonIndexed()));
-  const bodyMat = new THREE.MeshStandardMaterial({ roughness: 0.28, metalness: 0.55, envMapIntensity: 1.0 });
+  const bodyMat = new THREE.MeshPhysicalMaterial({ roughness: 0.45, metalness: 0.25, clearcoat: 1.0, clearcoatRoughness: 0.08, envMapIntensity: 1.0 }); // painted metal under clear coat
   const glassMat = new THREE.MeshStandardMaterial({ color: 0x07090c, roughness: 0.05, metalness: 0.4, envMapIntensity: 1.4 });
   const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0c0c0c, roughness: 0.8 });
   const hazMat = new THREE.MeshStandardMaterial({ color: 0x331a00, emissive: 0xff8a10, emissiveIntensity: 0 });
