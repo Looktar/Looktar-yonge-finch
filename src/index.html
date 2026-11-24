@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>央街芬治 · 黄昏</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
 /* VOICE: tense, nocturnal, a game HUD, not a web page
    IDEA: a sunset-lit street sign and a police scanner readout at Yonge & Finch
@@ -49,14 +49,15 @@ input[type=range]{accent-color:var(--amber);width:120px}
 @media (hover:none) and (pointer:coarse){.mobile{display:block}}
 /* ---- HUD ---- */
 #hud{display:none;position:fixed;inset:0;pointer-events:none;text-shadow:0 1px 3px rgba(0,0,0,.8)}
-#loc{position:absolute;left:24px;top:20px;font-weight:700;font-size:17px;background:var(--glass);padding:7px 14px;border-left:4px solid #1b5e3a;border-radius:4px}
-#stats{position:absolute;left:24px;top:62px;font-size:14px;color:var(--dim)}
+#loc{position:absolute;left:28px;top:22px;font:600 19px/1.2 'Barlow Condensed','Noto Sans SC',sans-serif;letter-spacing:.06em;text-transform:uppercase;padding-left:12px;border-left:2px solid var(--amber)}
+#loc:before{content:'位置 LOCATION';display:block;font:600 10.5px/1.6 'Barlow Condensed',sans-serif;letter-spacing:.28em;color:var(--dim)}
+#stats{position:absolute;left:40px;top:74px;font:600 12px 'Barlow Condensed','Noto Sans SC',sans-serif;letter-spacing:.2em;color:var(--dim)}
 #stats b{color:var(--ink);font-family:Oswald,sans-serif;font-size:18px;margin:0 12px 0 4px}
 #cmpw{position:absolute;left:50%;top:16px;transform:translateX(-50%);width:300px;text-align:center}
 #cmp{height:26px;background-repeat:repeat-x;-webkit-mask:linear-gradient(90deg,transparent,#000 25%,#000 75%,transparent);mask:linear-gradient(90deg,transparent,#000 25%,#000 75%,transparent)}
 #hdg{font-size:12px;color:var(--amber);font-family:Oswald,sans-serif}
 #wave{position:absolute;left:50%;top:66px;transform:translateX(-50%);text-align:center}
-#wv{font-size:20px;font-weight:900;color:var(--amber)}
+#wv{font:700 18px 'Barlow Condensed','Noto Sans SC',sans-serif;letter-spacing:.24em;color:var(--amber)}
 #zl{font-size:14px;color:#d5dbe0;margin-left:10px}
 #next{font-size:15px;color:#d5dbe0;margin-top:2px}
 #mmw{position:absolute;right:22px;top:18px;width:184px;height:184px;border-radius:50%;border:2px solid rgba(233,237,240,.35);background:#0d1012;box-shadow:0 0 0 4px rgba(0,0,0,.3)}
@@ -66,13 +67,15 @@ input[type=range]{accent-color:var(--amber);width:120px}
 #hpw{position:absolute;left:24px;bottom:24px;width:min(300px,40vw)}
 .lbl{font-size:13px;color:var(--dim);display:flex;justify-content:space-between;align-items:baseline}
 .lbl .num{font-size:28px;color:var(--ink);font-weight:700}
-.bar{height:10px;background:rgba(255,255,255,.12);border-radius:5px;overflow:hidden;margin-top:2px}
+.bar{height:4px;background:rgba(255,255,255,.14);border-radius:0;overflow:hidden;margin-top:4px}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,#c9302a,#ff6a4a);transition:width .15s}
 .bar.st{height:4px;margin-top:6px}.bar.st i{background:#d5dbe0;transition:none}
-#ammo{position:absolute;right:26px;bottom:22px;text-align:right}
-#wn{font-size:14px;color:var(--dim)}
-#am{font-size:52px;line-height:1;font-weight:700}
-#rs{font-size:22px;color:var(--dim)}
+#ammo{position:absolute;right:30px;bottom:24px;text-align:right}
+#ammo:after{content:'';display:block;margin:6px 0 0 auto;width:150px;height:9px;background:repeating-linear-gradient(90deg,rgba(233,237,240,.85) 0 3px,transparent 3px 5px)}
+#wn{order:3;font:600 11px 'Barlow Condensed','Noto Sans SC',sans-serif;letter-spacing:.24em;color:var(--dim);text-transform:uppercase}
+#am{font:600 60px/1 'Barlow Condensed',sans-serif}
+#rs{font:500 22px 'Barlow Condensed',sans-serif;color:var(--dim)}
+#rs:before{content:'/ ';opacity:.6}
 #hint{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);font-size:12.5px;color:#7f8991;white-space:nowrap}
 #xh{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%)}
 #xh:before,#xh:after{content:"";position:absolute;background:rgba(255,255,255,.85);box-shadow:0 0 2px #000}

@@ -69,7 +69,7 @@ export function wetPatch(sh, damp = '1.0', pud = '1.0') { // GLSL expressions: h
     uniform sampler2D tRefl; uniform float uWet, uReflOn; varying vec4 vRuv; varying vec3 vWw; float wPud, wDamp; ${WET_NOISE}`)
     .replace('#include <emissivemap_fragment>', `{
       wPud = wetPud(vWw.xz) * uWet * (${pud}); wDamp = wetDamp(vWw.xz) * uWet * (${damp});
-      diffuseColor.rgb *= mix(1.0, 0.6, wDamp) * mix(1.0, 0.42, wPud);
+      diffuseColor.rgb *= mix(1.0, 0.5, wDamp) * mix(1.0, 0.35, wPud);
       roughnessFactor = mix(roughnessFactor, 0.32, wDamp); roughnessFactor = mix(roughnessFactor, 0.14, wPud);
       normal = normalize(mix(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), wPud));
     }
@@ -77,8 +77,13 @@ export function wetPatch(sh, damp = '1.0', pud = '1.0') { // GLSL expressions: h
     .replace('#include <opaque_fragment>', `{
       vec3 Vw = normalize(cameraPosition - vWw); float fres = 0.03 + 0.97 * pow(1.0 - clamp(Vw.y, 0.0, 1.0), 5.0);
       vec2 off = normal.xy * 0.035 * (1.0 - wPud);
-      vec3 refl = uReflOn > 0.5 ? texture2DProj(tRefl, vRuv + vec4(off * vRuv.w, 0.0, 0.0)).rgb : vec3(0.0);
-      float amt = uReflOn * mix(wDamp * 0.85, 1.0, wPud) * fres;
+      vec3 refl = vec3(0.0);
+      if (uReflOn > 0.5) { // rough wet asphalt stretches reflections vertically (Saltline's long streaks of light)
+        float st = (1.0 - wPud) * 0.06 * vRuv.w;
+        for (int i = 0; i < 6; i++) { float o = (float(i) - 1.0) * st * 0.35; refl += texture2DProj(tRefl, vRuv + vec4(off * vRuv.w, o, 0.0)).rgb; }
+        refl /= 6.0;
+      }
+      float amt = uReflOn * mix(wDamp * 0.95, 1.0, wPud) * mix(fres, 1.0, 0.25 * wPud);
       outgoingLight = mix(outgoingLight, refl, clamp(amt, 0.0, 1.0));
     }
     #include <opaque_fragment>`);

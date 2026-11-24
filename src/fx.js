@@ -55,8 +55,8 @@ export function makeSky() {
       void main(){
         vec3 d = normalize(vD); float y = d.y; float s = max(dot(d, uSun), 0.0);
         float az = dot(normalize(d.xz + 1e-5), normalize(uSun.xz)) * 0.5 + 0.5;
-        vec3 zen = vec3(0.06, 0.12, 0.30), mid = vec3(0.30, 0.38, 0.60);
-        vec3 horSun = vec3(1.25, 0.58, 0.24), horAnti = vec3(0.55, 0.45, 0.58);
+        vec3 zen = vec3(0.10, 0.14, 0.22), mid = vec3(0.36, 0.40, 0.48);
+        vec3 horSun = vec3(1.7, 1.05, 0.55), horAnti = vec3(0.5, 0.5, 0.52);
         vec3 hor = mix(horAnti, horSun, pow(az, 2.2));
         vec3 c = mix(hor, mid, smoothstep(0.0, 0.28 + 0.12 * az, y));
         c = mix(c, zen, smoothstep(0.25, 0.95, y));
@@ -70,8 +70,8 @@ export function makeSky() {
         float cov = 0.43 - 0.05 * az;
         float dens = smoothstep(cov, cov + 0.2, n) * smoothstep(0.015, 0.11, y) * (1.0 - 0.35 * smoothstep(0.5, 0.95, y));
         float thin = 1.0 - smoothstep(cov + 0.03, cov + 0.26, n);
-        vec3 under = mix(vec3(0.17, 0.15, 0.22), vec3(0.42, 0.27, 0.3), pow(az, 1.4)) * (0.85 + 0.3 * fbm(cp * 2.7));
-        vec3 rim = vec3(1.9, 0.82, 0.34) * (0.25 + 2.2 * pow(s, 4.0)) * pow(az, 1.8);
+        vec3 under = mix(vec3(0.16, 0.17, 0.2), vec3(0.42, 0.33, 0.28), pow(az, 1.4)) * (0.85 + 0.3 * fbm(cp * 2.7));
+        vec3 rim = vec3(2.2, 1.35, 0.7) * (0.25 + 2.6 * pow(s, 4.0)) * pow(az, 1.8);
         vec3 deck = under + rim * (0.35 + 0.65 * thin);
         vec2 hp = d.xz / (y + 0.2);
         float ci = fbm(hp * vec2(0.3, 1.6) + vec2(3.0, 1.0)); ci = smoothstep(0.55, 0.8, ci) * smoothstep(0.05, 0.3, y) * (1.0 - smoothstep(0.6, 0.95, y));

@@ -45,9 +45,12 @@ THREE.ShaderChunk.fog_pars_fragment = `#ifdef USE_FOG
 THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   vec3 fogWD = normalize((vec4(vFogView, 0.0) * viewMatrix).xyz);
   float fogSun = max(dot(fogWD, vec3(${SUN.x.toFixed(4)}, ${SUN.y.toFixed(4)}, ${SUN.z.toFixed(4)})), 0.0);
-  vec3 fogC = mix(fogColor, vec3(1.0, 0.56, 0.3), pow(fogSun, 4.0) * 0.85);
+  vec3 fogC = mix(fogColor, vec3(1.35, 0.86, 0.48), pow(fogSun, 5.0) * 0.95) * (1.0 + 0.6 * pow(fogSun, 24.0));
   #ifdef FOG_EXP2
-    float fogFactor = 1.0 - exp(- fogDensity * fogDensity * vFogDepth * vFogDepth);
+    // height fog: dense near the street, thinning upward (analytic integral of d0 * exp(-h / 28 m) along the ray)
+    float fogDist = length(vFogView); float h0 = cameraPosition.y, dh = fogWD.y * fogDist;
+    float Hf = 28.0; float k = abs(dh) > 0.01 ? (exp(-h0 / Hf) - exp(-(h0 + dh) / Hf)) * Hf / dh : exp(-h0 / Hf);
+    float fogFactor = 1.0 - exp(-fogDensity * fogDist * (0.3 + 1.5 * k));
   #else
     float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
   #endif
@@ -57,7 +60,7 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
 // glass, droplets) can exceed that on real GPUs, and bloom then smears Inf/NaN over the whole frame
 THREE.ShaderChunk.opaque_fragment = 'outgoingLight = clamp(outgoingLight, vec3(0.0), vec3(3e4));\n' + THREE.ShaderChunk.opaque_fragment;
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x9c8f9a, 0.0019);
+scene.fog = new THREE.FogExp2(0x8c8a86, 0.0015);
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 700);
 camera.rotation.order = 'YXZ'; scene.add(camera);
 const sky = makeSky(); scene.add(sky);
@@ -88,12 +91,12 @@ scene.add(mirror);
   const gnd = new THREE.Mesh(new THREE.CircleGeometry(80, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x4a4542 })); gnd.position.y = -3; es.add(gnd);
   const r = rng(5); const bg = new THREE.BoxGeometry(1, 1, 1);
   for (let i = 0; i < 26; i++) { const a = r() * Math.PI * 2, d = 45 + r() * 25, h = 4 + r() * 10; const m = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.16 + r() * 0.12, 0.15 + r() * 0.1, 0.15 + r() * 0.1) })); m.position.set(Math.cos(a) * d, h / 2 - 3, Math.sin(a) * d); m.scale.set(8 + r() * 10, h, 8 + r() * 10); m.lookAt(0, m.position.y, 0); es.add(m); }
-  const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(es, 0.015, 0.1, 400).texture; scene.environmentIntensity = 1;
+  const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(es, 0.015, 0.1, 400).texture; scene.environmentIntensity = 0.7;
 }
 
-const hemi = new THREE.HemisphereLight(0x8fa3cf, 0x4a3d34, 2.8); scene.add(hemi);
+const hemi = new THREE.HemisphereLight(0x9aa8bd, 0x3a3631, 2.0); scene.add(hemi);
 // low sun in the WSW, as at a late-November sunset over Yonge & Finch
-const sun = new THREE.DirectionalLight(0xffa66a, 5.4); scene.add(sun); scene.add(sun.target);
+const sun = new THREE.DirectionalLight(0xffb070, 7.0); scene.add(sun); scene.add(sun.target);
 sun.castShadow = Q.shadow > 0; sun.shadow.mapSize.set(Q.shadow || 1024, Q.shadow || 1024);
 { const c = sun.shadow.camera; c.left = -130; c.right = 130; c.top = 70; c.bottom = -70; c.near = 1; c.far = 1200; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.06; }
 function placeSun(x, z) { // follow the player, snapped to shadow texels to avoid shimmering
@@ -116,12 +119,12 @@ const pAdd = new Particles(scene, 1500, true, tex.glow);
 const pNorm = new Particles(scene, 1500, false, tex.glow);
 
 // viewmodel lives in its own scene/pass: own lighting, never clips into walls
-const vmScene = new THREE.Scene(); vmScene.environment = scene.environment; vmScene.environmentIntensity = 0.35;
-const vmCam = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.01, 10); vmScene.add(vmCam);
+const vmScene = new THREE.Scene(); vmScene.environment = scene.environment; vmScene.environmentIntensity = 1.1;
+const vmCam = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.01, 10); vmScene.add(vmCam); // Saltline-style narrow viewmodel FOV: a bigger, less distorted gun
 const vmRoot = new THREE.Group(); vmCam.add(vmRoot);
-const vmHemi = new THREE.HemisphereLight(0x8fa3cf, 0x3a3029, 0.6); vmScene.add(vmHemi);
-const vmKey = new THREE.DirectionalLight(0xffb27a, 0.8); vmScene.add(vmKey);
-const vmRim = new THREE.DirectionalLight(0x8fb0ff, 0.35); vmRim.position.set(-1.5, 0.5, -1); vmScene.add(vmRim);
+const vmHemi = new THREE.HemisphereLight(0xaab6c8, 0x3a3029, 2.2); vmScene.add(vmHemi);
+const vmKey = new THREE.DirectionalLight(0xffb27a, 3.2); vmScene.add(vmKey);
+const vmRim = new THREE.DirectionalLight(0x9fb8ff, 1.6); vmRim.position.set(-1.5, 0.5, -1); vmScene.add(vmRim);
 const vmMuzzle = new THREE.PointLight(0xffb060, 0, 2.5, 2); vmScene.add(vmMuzzle);
 
 // ---------- post ----------
@@ -465,13 +468,13 @@ function update(dt) {
   const wantAds = S.adsHeld && S.reloadT <= 0 && !(sprint && moving > 5) ? 1 : 0; S.ads = (S.ads || 0) + (wantAds - (S.ads || 0)) * Math.min(1, dt * 12); const ads = S.ads;
   S.swap = Math.max(0, (S.swap || 0) - dt); S.fireAnim = Math.max(0, (S.fireAnim || 0) - dt * 14);
   const bobK = Math.min(1, moving / 4) * (1 - ads * 0.85); const sprintK = sprint && moving > 5 ? 1 : 0;
-  const hx = ud.hip.x, hy = ud.hip.y, hz = ud.hip.z, ax = -ud.sight.x, ay = -ud.sight.y, az = ud.adsZ - ud.sight.z; const vo = feel.vm();
+  const vk = Math.tan(28 * Math.PI / 180) / Math.tan(33 * Math.PI / 180); const hx = ud.hip.x * vk, hy = ud.hip.y * vk, hz = ud.hip.z, ax = -ud.sight.x, ay = -ud.sight.y, az = ud.adsZ - ud.sight.z; const vo = feel.vm();
   w.vm.position.set(hx + (ax - hx) * ads + Math.sin(player.bob) * 0.012 * bobK + sprintK * 0.03, hy + (ay - hy) * ads - Math.abs(Math.cos(player.bob)) * 0.01 * bobK - rl * 0.08 - S.swap * 0.6 - sprintK * 0.03, hz + (az - hz) * ads + vo.z * (1 - ads * 0.5)); w.vm.position.x += vo.x * (1 - ads * 0.6); w.vm.position.y += vo.y * (1 - ads * 0.6);
   w.vm.rotation.set(vo.rx * (1 - ads * 0.6) + rl * 0.5 - sprintK * 0.35, (1 - ads) * (ud.hipYaw || 0.07) + sprintK * 0.55 + vo.ry * (1 - ads * 0.6), (1 - ads) * (ud.hipRoll || 0) + rl * 0.6 + sprintK * 0.25 + vo.rz * (1 - ads * 0.5));
   if (ud.mag) { ud.mag.position.y = -Math.max(0, Math.sin(rp * Math.PI * 1.0)) * 0.22 * (rp > 0.2 && rp < 0.85 ? 1 : Math.max(0, Math.sin(rp * Math.PI))); }
   if (ud.pump) { const pa = S.fireT > 0 && w.cas === 1 ? Math.sin(Math.max(0, Math.min(1, (w.rate - S.fireT) / 0.45)) * Math.PI) : 0; ud.pump.position.z = pa * 0.08; }
   if (ud.slide) ud.slide.position.z = S.fireAnim * 0.025;
-  const fovT = 72 + (ud.fov - 72) * ads + sprintK * FEEL.sprintFov * (1 - ads); if (Math.abs(camera.fov - fovT) > 0.01) { camera.fov += (fovT - camera.fov) * Math.min(1, dt * 10); camera.updateProjectionMatrix(); vmCam.fov = 66 + (ud.fov - 66) * ads; vmCam.updateProjectionMatrix(); }
+  const fovT = 72 + (ud.fov - 72) * ads + sprintK * FEEL.sprintFov * (1 - ads); if (Math.abs(camera.fov - fovT) > 0.01) { camera.fov += (fovT - camera.fov) * Math.min(1, dt * 10); camera.updateProjectionMatrix(); vmCam.fov = 56 + (ud.fov - 56) * ads; vmCam.updateProjectionMatrix(); }
   $('xh').style.opacity = 1 - ads;
   w.flash.visible = S.flashT > 0; muzzleLight.intensity = S.flashT > 0 ? 40 : 0; vmMuzzle.intensity = S.flashT > 0 ? 3 : 0; if (S.flashT > 0) { muzzleLight.position.copy(ud.muzzle).applyMatrix4(w.vm.matrix); vmMuzzle.position.copy(muzzleLight.position); } S.flashT -= dt;
   updateCasings(dt);
@@ -615,4 +618,4 @@ if (HS === 'debug' || QS.has('debug')) {
   );
   document.body.appendChild(box);
 }
-window.__yf = { S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun, tick: () => frameNo++, mirror, WET, finalPass };
+window.__yf = { S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun, tick: () => frameNo++, mirror, WET, finalPass, vmScene, vmCam, vmRoot };

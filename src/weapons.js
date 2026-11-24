@@ -63,8 +63,8 @@ function wetGun(mat, size = 140) {
       float dh(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
       { vec3 q = vOp * ${size.toFixed(1)}; vec3 c = floor(q); vec3 f = fract(q) - 0.5; float h = dh(c); vec3 o = vec3(dh(c + 1.3), dh(c + 2.7), dh(c + 4.1)) - 0.5;
-        vec3 d = f - o * 0.5; float r = 0.12 + 0.22 * dh(c + 7.7); float dist = length(d); gDrop = step(0.55, h) * (1.0 - smoothstep(r * 0.75, r, dist)); gDn = d / max(r, 1e-3);
-        roughnessFactor = mix(roughnessFactor, 0.15, gDrop); diffuseColor.rgb *= mix(1.0, 0.75, gDrop); }`)
+        vec3 d = f - o * 0.5; float r = 0.08 + 0.14 * dh(c + 7.7); float dist = length(d); gDrop = step(0.72, h) * (1.0 - smoothstep(r * 0.7, r, dist)); gDn = d / max(r, 1e-3);
+        roughnessFactor = mix(roughnessFactor, 0.28, gDrop); diffuseColor.rgb *= mix(1.0, 0.8, gDrop); }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       normal = normalize(normal + (viewMatrix * vec4(gDn, 0.0)).xyz * gDrop * 0.6);`);
   };
@@ -118,9 +118,10 @@ export function buildRifle() {
   g.add(M([cylZ(0.0095, 0.0095, 0.19, 0.62, 0.016, 14), cylZ(0.0145, 0.0145, 0.60, 0.665, 0.016, 12), boxU(0.024, 0.024, 0.43, 0.46, 0.022)], m.steel));
   g.add(M([boxU(0.031, 0.004, 0.612, 0.62, 0.016), boxU(0.031, 0.004, 0.628, 0.636, 0.016), boxU(0.031, 0.004, 0.644, 0.652, 0.016)], m.rubber));
   // buffer tube + stock (FDE) + butt pad
-  g.add(M([cylZ(0.016, 0.016, -0.2, 0.0, 0.024, 16)], m.metal));
-  g.add(M([prof([[-0.12, 0.044], [-0.29, 0.05], [-0.3, 0.046], [-0.3, -0.07], [-0.27, -0.072], [-0.21, -0.02], [-0.13, 0.0], [-0.12, 0.004]], 0.04, 0.005)], m.fde));
-  g.add(M([boxU(0.042, 0.122, -0.315, -0.298, -0.012, 0, 0.004)], m.rubber));
+  const stock = new THREE.Group(); stock.visible = false; g.add(stock); // out of frame in Saltline-style framing; kept for ADS / future use
+  stock.add(M([cylZ(0.016, 0.016, -0.2, 0.0, 0.024, 16)], m.metal));
+  stock.add(M([prof([[-0.12, 0.044], [-0.29, 0.05], [-0.3, 0.046], [-0.3, -0.07], [-0.27, -0.072], [-0.21, -0.02], [-0.13, 0.0], [-0.12, 0.004]], 0.04, 0.005)], m.fde));
+  stock.add(M([boxU(0.042, 0.122, -0.315, -0.298, -0.012, 0, 0.004)], m.rubber));
   // charging handle
   g.add(M([boxU(0.05, 0.008, -0.012, 0.004, 0.05, 0, 0.002)], m.metal));
   // folded back-up sights
@@ -151,7 +152,7 @@ export function buildRifle() {
   g.add(forearm([0.02, -0.13, 0.03], [0.1, -0.26, 0.26]));
   g.add(forearm([-0.05, -0.03, -0.29], [-0.2, -0.24, -0.02]));
   g.traverse(o => o.frustumCulled = false);
-  g.userData = { muzzle: new THREE.Vector3(0, 0.016, -0.67), eject: new THREE.Vector3(0.02, 0.03, -0.1), sight: new THREE.Vector3(0, dotV, -0.12), mag, hip: new THREE.Vector3(0.235, -0.155, -0.5), hipYaw: 0.42, hipRoll: 0.1, adsZ: -0.2, fov: 52 }; // canted to show the rail and sight side-on, like Saltline's carbine
+  g.userData = { muzzle: new THREE.Vector3(0, 0.016, -0.67), eject: new THREE.Vector3(0.02, 0.03, -0.1), sight: new THREE.Vector3(0, dotV, -0.12), mag, hip: new THREE.Vector3(0.27, -0.22, -0.5), hipYaw: 0.34, hipRoll: 0.08, adsZ: -0.2, fov: 52 }; // canted to show the rail and sight side-on, like Saltline's carbine
   return g;
 }
 

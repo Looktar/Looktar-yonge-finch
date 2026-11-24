@@ -207,6 +207,32 @@ export function addStreetscape(scene, ctx) {
       scene.add(new THREE.Mesh(mergeGeometries(shAd), new THREE.MeshStandardMaterial({ map: at, emissiveMap: at, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.3 })));
     }
   }
+  // ---- construction clutter (Yonge & Finch has had road / TTC work for years): concrete Jersey barriers in short
+  // runs along the curb, orange cones, and a few tall plastic barrels with reflective bands ----
+  {
+    const jersey = (() => { const sh = new THREE.Shape([[-0.3, 0], [0.3, 0], [0.3, 0.08], [0.1, 0.25], [0.08, 0.81], [-0.08, 0.81], [-0.1, 0.25], [-0.3, 0.08]].map(([x, y]) => new THREE.Vector2(x, y)));
+      const g = new THREE.ExtrudeGeometry(sh, { depth: 3.0, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 1 }); g.translate(0, 0, -1.5); return g; })();
+    const cone = mergeGeometries([new THREE.BoxGeometry(0.36, 0.03, 0.36).translate(0, 0.015, 0), new THREE.ConeGeometry(0.13, 0.7, 12, 1, true).translate(0, 0.38, 0)].map(g => g.toNonIndexed()));
+    const barrel = new THREE.CylinderGeometry(0.26, 0.3, 1.05, 14).translate(0, 0.53, 0);
+    const bandTex = (() => { const c = document.createElement('canvas'); c.width = 16; c.height = 128; const g = c.getContext('2d'); g.fillStyle = '#e8601c'; g.fillRect(0, 0, 16, 128); g.fillStyle = '#f2f2ea'; for (const y of [18, 50, 82]) g.fillRect(0, y, 16, 12); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+    const barMat = new THREE.MeshStandardMaterial({ color: 0xb9b6ae, roughness: 0.9 }), coneMat = new THREE.MeshStandardMaterial({ color: 0xff5a12, roughness: 0.55 }), drumMat = new THREE.MeshStandardMaterial({ map: bandTex, roughness: 0.6 });
+    const B = [], Cn = [], Dr = [];
+    for (const rd of roads) {
+      if (rd.t !== 'pri' && rd.t !== 'sec') continue;
+      for (let i = 0; i < rd.p.length - 1; i++) {
+        const a = rd.p[i], b = rd.p[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 8) continue; const tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L;
+        for (let s0 = 10 + r() * 20; s0 < L - 10; s0 += 45 + r() * 60) {
+          if (r() < 0.55) continue; const side = r() < 0.5 ? -1 : 1, off = (rd.w || 12) / 2 - 0.5, n = 2 + Math.floor(r() * 4);
+          const x0 = a[0] + tx * s0 - tz * off * side, z0 = a[1] + tz * s0 + tx * off * side; if (!inPlay(x0, z0, 0) || Math.hypot(x0 - 0, z0 - 92) > 260) continue;
+          const ang = Math.atan2(tx, tz);
+          for (let k = 0; k < n; k++) { const x = x0 + tx * k * 3.05, z = z0 + tz * k * 3.05; if (col.isBlocked(x, z)) break; B.push([x, z, ang + (r() - 0.5) * 0.04]); col.addPoly([[x - 0.35, z - 0.35], [x + 0.35, z - 0.35], [x + 0.35, z + 0.35], [x - 0.35, z + 0.35]], false); }
+          for (let k = 0; k < 2 + Math.floor(r() * 3); k++) { const t = -2 - k * 2.2, x = x0 + tx * t - tz * 0.4 * side, z = z0 + tz * t + tx * 0.4 * side; (r() < 0.7 ? Cn : Dr).push([x, z, r() * 6]); }
+        }
+      }
+    }
+    const put = (geo, mat, list) => { if (!list.length) return; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach(([x, z, a], i) => { m4.compose(v.set(x, 0, z), q.setFromEuler(e.set(0, a, 0)), one); im.setMatrixAt(i, m4); }); im.instanceMatrix.needsUpdate = true; im.castShadow = im.receiveShadow = true; scene.add(im); };
+    put(jersey, barMat, B); put(cone, coneMat, Cn); put(barrel, drumMat, Dr);
+  }
   return { poles };
 }
 

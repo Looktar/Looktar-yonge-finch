@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
-export const LOOK = { agx: 0.25, pow: 1.18, sat: 1.22, ca: 0.0013, sharpen: 0.3, grain: 0.02, vignette: 0.3, shafts: 0.55, streak: 0.05, key: 0.16, minExp: 0.6, maxExp: 2.0, tau: 1.5 };
+export const LOOK = { agx: 0.25, pow: 1.18, sat: 1.02, ca: 0.0013, sharpen: 0.3, grain: 0.02, vignette: 0.3, shafts: 0.9, streak: 0.05, key: 0.16, minExp: 0.6, maxExp: 2.0, tau: 1.5 };
 
 export function makeFinalPass() {
   const pass = new ShaderPass({
@@ -25,7 +25,7 @@ export function makeFinalPass() {
       float lum(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
       vec3 hdr(vec2 uv){ return texture2D(tDiffuse, uv).rgb; }
       vec3 tone(vec3 c){ vec3 a = ACESFilmicToneMapping(c); vec3 g = AgXToneMapping(c); return mix(a, g, uAgx); }
-      vec3 grade(vec3 c){ c = pow(max(c, 0.0), vec3(uPow)); float l = lum(c); return max(mix(vec3(l), c, uSat), 0.0); }
+      vec3 grade(vec3 c){ c = pow(max(c, 0.0), vec3(uPow)); float l = lum(c); c = mix(vec3(l), c, uSat); c *= mix(vec3(0.92, 0.98, 1.06), vec3(1.05, 1.0, 0.92), smoothstep(0.1, 0.7, l)); return max(c, 0.0); }
       vec3 shade(vec2 uv){
         vec2 d = uv - 0.5; float r = length(d);
         // chromatic aberration grows towards the edges

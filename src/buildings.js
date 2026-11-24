@@ -324,6 +324,15 @@ export function facadeMaterial() {
           alb = mix(wc, alb, step(0.5, win) );
           gWall = 1.0 - step(0.5, win); gWNts = texture(uWN, uvw).xyz * 2.0 - 1.0;
         }
+        // weathering: vertical rain streaks washing down from each floor line, grime splash at the base, patchy dirt
+        if (abs(vWN.y) < 0.5 && st != 9) {
+          float sx = floor(F.x / 0.35); float streak = h21(vec2(sx, seed)) * (0.5 + 0.5 * sin(F.x * 7.3 + seed));
+          float under = fract(F.y / max(fh, 2.5)); float drip = smoothstep(0.55, 0.0, under) * step(0.55, h21(vec2(sx, seed + 3.0)));
+          float base = 1.0 - smoothstep(0.0, 1.6, F.y);
+          float patchy = h21(floor(F * vec2(0.25, 0.4)) + seed);
+          float dirt = clamp(drip * streak * 0.32 + base * 0.38 + (patchy - 0.5) * 0.12, 0.0, 0.6) * (1.0 - smoothstep(0.35, 1.0, max(dF.x, dF.y) * 2.0));
+          alb *= 1.0 - dirt * mix(1.0, 0.35, win);
+        }
         // ground-floor shops: storefront glazing, mullions, kick plate, backlit interiors
         float sfH = st == 7 ? 3.5 : 4.3;
         if (front > 0.5 && F.y < sfH && st != 9) {
