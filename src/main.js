@@ -139,7 +139,7 @@ const grade = new ShaderPass({
   fragmentShader: `uniform sampler2D tDiffuse; uniform float uTime; uniform float uDmg; uniform float uLow; varying vec2 vUv;
     float h(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233))+uTime*7.0)*43758.5453); }
     void main(){ vec2 d=vUv-0.5; float r=length(d);
-      vec3 c; float ca = uDmg*0.006; // base aberration / vignette / grain now live in the final camera pass c.r=texture2D(tDiffuse, vUv+d*ca).r; c.g=texture2D(tDiffuse, vUv).g; c.b=texture2D(tDiffuse, vUv-d*ca).b;
+      vec3 c; float ca = uDmg*0.006; /* base aberration, vignette and grain now live in the final camera pass */ c.r=texture2D(tDiffuse, vUv+d*ca).r; c.g=texture2D(tDiffuse, vUv).g; c.b=texture2D(tDiffuse, vUv-d*ca).b;
       float l=dot(c,vec3(0.299,0.587,0.114)); c=mix(vec3(l),c,1.0 - uLow*0.55);
       c=mix(c, vec3(0.5,0.0,0.0), smoothstep(0.25,0.75,r)*uDmg*0.9);
       gl_FragColor=vec4(c,1.0);} `,

@@ -19,7 +19,6 @@ export function makeFinalPass() {
     fragmentShader: `
       #include <common>
       #include <tonemapping_pars_fragment>
-      #include <colorspace_pars_fragment>
       uniform sampler2D tDiffuse; uniform vec2 uTexel; uniform float uTime; uniform vec3 uSun; uniform float uShafts, uStreak, uAgx, uPow, uSat, uCA, uSharpen, uGrain, uVig; uniform vec3 uSunCol;
       varying vec2 vUv;
       float lum(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
