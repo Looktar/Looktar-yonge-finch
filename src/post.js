@@ -44,7 +44,7 @@ export function makeFinalPass() {
         // anamorphic streak on highlights (lamps, signal heads, sun)
         if (uStreak > 0.0) {
           vec3 st = vec3(0.0);
-          for (int i = -7; i <= 7; i++) { if (i == 0) continue; float o = float(i) * 0.018; vec3 s = hdr(uv + vec2(o, 0.0)); st += max(s - 2.5, 0.0) * (1.0 - abs(float(i)) / 8.0); }
+          for (int i = -12; i <= 12; i++) { if (i == 0) continue; float o = float(i) * 0.0045 * (1.0 + 0.35 * fract(sin(dot(uv, vec2(91.3, 47.1))) * 4375.5)); vec3 s = hdr(uv + vec2(o, 0.0)); st += max(s - 2.5, 0.0) * pow(1.0 - abs(float(i)) / 13.0, 2.0); } st /= 6.0;
           c += st * vec3(0.55, 0.7, 1.0) * uStreak;
         }
         // tone map (exposure is applied by the chunk via toneMappingExposure), then the look
