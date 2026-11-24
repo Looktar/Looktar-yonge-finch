@@ -164,16 +164,67 @@ function buildRoads(roads, tex) {
     const sw = { pri: 1.0, sec: 1.0, ter: 1.0, res: 1.8, unc: 1.8 }[r.t] || 0;
     if (sw) ribbon(r.p, w + sw * 2, 0.012, 0, walk);
     ribbon(r.p, w, 0.03, 0, asphalt);
-    if (RW[r.t]) {
-      const lanes = r.lanes || (r.oneway ? 2 : r.t === 'ter' ? 2 : 4); const lw = w / lanes;
-      if (r.t !== 'ter') { ribbon(r.p, 0.14, 0.042, -w / 2 + 0.35, solid, 0); ribbon(r.p, 0.14, 0.042, w / 2 - 0.35, solid, 0); }
-      if (r.oneway) { for (let i = 1; i < lanes; i++) ribbon(r.p, 0.13, 0.044, -w / 2 + i * lw, dashed, 9); }
-      else {
-        ribbon(r.p, 0.12, 0.044, -0.13, yellow, 0); ribbon(r.p, 0.12, 0.044, 0.13, yellow, 0);
-        const half = Math.floor(lanes / 2); for (let i = 1; i < half; i++) { ribbon(r.p, 0.13, 0.044, i * lw, dashed, 9); ribbon(r.p, 0.13, 0.044, -i * lw, dashed, 9); }
+  }
+  // ---- pavement markings (Ontario practice): no edge lines on curbed arterials; double yellow centre line on two-way
+  // roads; white 3 m / 6 m lane lines; everything stops 6 m short of a crossing arterial, where a white stop bar goes
+  // across the approach lanes with straight / left-turn arrows behind it
+  const MS = 0.5, MN = Math.ceil(EXT * 2 / MS), own = new Int16Array(MN * MN).fill(-1);
+  // one id per street: OSM splits a street into many ways, and its own pieces must not read as a crossing road
+  const gid = new Map(); const streetId = r => { const k = r.name || ('#' + roads.indexOf(r)); if (!gid.has(k)) gid.set(k, gid.size); return gid.get(k); };
+  roads.forEach(r0 => {
+    if (!RW[r0.t]) return; const r = r0, id = streetId(r0); const h = r.w / 2 + 0.4;
+    for (let i = 0; i < r.p.length - 1; i++) { const a = r.p[i], b = r.p[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
+      for (let t = 0; t <= L; t += 0.25) for (let o = -h; o <= h; o += 0.25) { const ix = Math.floor((a[0] + ux * t - uz * o + EXT) / MS), iz = Math.floor((a[1] + uz * t + ux * o + EXT) / MS); if (ix < 0 || iz < 0 || ix >= MN || iz >= MN) continue; const k = ix + iz * MN; own[k] = own[k] === -1 || own[k] === id ? id : -2; } }
+  });
+  const foreign = (x, z, id) => { const ix = Math.floor((x + EXT) / MS), iz = Math.floor((z + EXT) / MS); if (ix < 0 || iz < 0 || ix >= MN || iz >= MN) return false; const k = own[ix + iz * MN]; return k === -2 || (k >= 0 && k !== id); };
+  const arrows = { pos: [], uv: [] };
+  const quadOut = (out, A, B, C, D, uvs, y) => { const P = [A, B, C, A, C, D]; const U = uvs ? [uvs[0], uvs[1], uvs[2], uvs[0], uvs[2], uvs[3]] : null; P.forEach((q, j) => { out.pos.push(q[0], y, q[1]); out.uv.push(...(U ? U[j] : [0, 0])); }); };
+  roads.forEach(r => {
+    if (!RW[r.t]) return; const id = streetId(r);
+    const w = r.w, lanes = r.lanes || (r.oneway ? 2 : r.t === 'ter' ? 2 : 4), lw = w / lanes;
+    // sample the centre line every 0.5 m: position, direction, distance along
+    const S = []; let acc = 0;
+    for (let i = 0; i < r.p.length - 1; i++) { const a = r.p[i], b = r.p[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.01) continue; const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
+      for (let t = 0; t < L; t += 0.5) S.push({ x: a[0] + ux * t, z: a[1] + uz * t, ux, uz, s: acc + t }); acc += L; }
+    if (S.length < 2) return;
+    const clearAt = (q, o) => { const x = q.x - q.uz * o, z = q.z + q.ux * o; return !foreign(x, z, id) && !foreign(x + q.ux * 6, z + q.uz * 6, id) && !foreign(x - q.ux * 6, z - q.uz * 6, id); };
+    const line = (o, width, out, dash, y) => {
+      for (let i = 0; i < S.length - 1; i++) {
+        const q = S[i], q2 = S[i + 1]; if (!clearAt(q, o) || !clearAt(q2, o)) continue;
+        if (dash && (q.s % 9) >= 3) continue;
+        const P = (p, oo) => [p.x - p.uz * oo, p.z + p.ux * oo];
+        quadOut(out, P(q, o - width / 2), P(q2, o - width / 2), P(q2, o + width / 2), P(q, o + width / 2), null, y);
+      }
+    };
+    if (r.oneway) { for (let i = 1; i < lanes; i++) line(-w / 2 + i * lw, 0.13, solid, true, 0.044); }
+    else {
+      line(-0.12, 0.11, yellow, false, 0.044); line(0.12, 0.11, yellow, false, 0.044);
+      const half = Math.floor(lanes / 2); const lw2 = (w / 2) / Math.max(1, half);
+      for (let i = 1; i < half; i++) { line(i * lw2, 0.13, solid, true, 0.044); line(-i * lw2, 0.13, solid, true, 0.044); }
+    }
+    // stop bars + arrows where the road meets a crossing arterial
+    for (let i = 1; i < S.length; i++) {
+      const was = clearAt(S[i - 1], 0), now = clearAt(S[i], 0); if (was === now) continue;
+      const fwd = was && !now; // travelling +s reaches the intersection here
+      const q = fwd ? S[i - 1] : S[i]; const sg = fwd ? 1 : -1; // approach direction along +u or -u
+      const ux = q.ux * sg, uz = q.uz * sg; // travel direction of the approach lanes
+      let o0, o1; // offsets (in the road's own n frame) covered by the approach lanes
+      if (r.oneway) { if (!fwd) continue; o0 = -w / 2 + 0.3; o1 = w / 2 - 0.3; }
+      else if (fwd) { o0 = 0.3; o1 = w / 2 - 0.3; } else { o0 = -w / 2 + 0.3; o1 = -0.3; }
+      const at = (along, o) => [q.x - q.uz * o + ux * along, q.z + q.ux * o + uz * along];
+      quadOut(solid, at(-1.0, o0), at(-1.0, o1), at(-0.55, o1), at(-0.55, o0), null, 0.046);
+      // arrows, 9 m behind the bar, one per approach lane; the lane nearest the centre turns left
+      const nL = Math.max(1, Math.round((o1 - o0) / 3.3)); const lwA = (o1 - o0) / nL;
+      for (let k = 0; k < nL; k++) {
+        const oc = o0 + lwA * (k + 0.5); const nearCentre = r.oneway ? k === 0 : (fwd ? k === 0 : k === nL - 1);
+        const cell = nearCentre && nL >= 2 ? 1 : 0; const u0 = cell * 0.5, u1 = u0 + 0.5;
+        const A = at(-11.5, oc - 0.55), B = at(-11.5, oc + 0.55), C = at(-6.5, oc + 0.55), D = at(-6.5, oc - 0.55);
+        // arrow texture points along +v; v runs from the far end (-11.5) to the bar end (-6.5)
+        const flip = (fwd ? 1 : -1) * (r.oneway ? 1 : 1) < 0;
+        quadOut(arrows, A, B, C, D, flip ? [[u1, 0], [u0, 0], [u0, 1], [u1, 1]] : [[u0, 0], [u1, 0], [u1, 1], [u0, 1]], 0.046);
       }
     }
-  }
+  });
   // ---- curbs: a pale 15 cm concrete kerb with a darker gutter along both edges of every street, broken where the
   // edge runs across another carriageway (intersections, driveways onto arterials)
   const RS = 0.5, RN = Math.ceil(EXT * 2 / RS), cover = new Uint8Array(RN * RN);
@@ -217,6 +268,16 @@ function buildRoads(roads, tex) {
   for (const m of [roadMat, walkMat, lineMat, yelMat, dashMat]) { m.polygonOffset = true; }
   walkMat.polygonOffsetFactor = -1; roadMat.polygonOffsetFactor = -2; lineMat.polygonOffsetFactor = yelMat.polygonOffsetFactor = dashMat.polygonOffsetFactor = -4;
   mk(walk, walkMat, 1); mk(asphalt, roadMat, 2); mk(solid, lineMat, 3); mk(yellow, yelMat, 3); mk(dashed, dashMat, 3);
+  { // arrow atlas: straight (left half) and left-turn (right half), white on transparent
+    const c = document.createElement('canvas'); c.width = 128; c.height = 512; const g = c.getContext('2d'); g.fillStyle = '#fff';
+    const shaft = (x) => g.fillRect(x - 7, 150, 14, 362);
+    shaft(32); g.beginPath(); g.moveTo(32, 20); g.lineTo(58, 160); g.lineTo(6, 160); g.closePath(); g.fill();
+    g.fillRect(89, 250, 14, 262); g.beginPath(); g.moveTo(103, 264); g.quadraticCurveTo(103, 170, 86, 150); g.lineTo(96, 140); g.quadraticCurveTo(117, 170, 117, 264); g.fill();
+    g.beginPath(); g.moveTo(72, 108); g.lineTo(104, 120); g.lineTo(84, 160); g.closePath(); g.fill();
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 8;
+    const am = new THREE.MeshStandardMaterial({ color: 0xa8a8a0, roughness: 0.6, alphaMap: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
+    mk(arrows, am, 3);
+  }
   return { grp, roadMat, walkMat };
 }
 
