@@ -77,7 +77,7 @@ export function wetPatch(sh, damp = '1.0', pud = '1.0') { // GLSL expressions: h
       vec3 Vw = normalize(cameraPosition - vWw); float fres = 0.03 + 0.97 * pow(1.0 - clamp(Vw.y, 0.0, 1.0), 5.0);
       vec2 off = normal.xy * 0.035 * (1.0 - wPud);
       vec3 refl = uReflOn > 0.5 ? texture2DProj(tRefl, vRuv + vec4(off * vRuv.w, 0.0, 0.0)).rgb : vec3(0.0);
-      float amt = uReflOn * mix(wDamp * 0.55, 1.0, wPud) * fres;
+      float amt = uReflOn * mix(wDamp * 0.85, 1.0, wPud) * fres;
       outgoingLight = mix(outgoingLight, refl, clamp(amt, 0.0, 1.0));
     }
     #include <opaque_fragment>`);

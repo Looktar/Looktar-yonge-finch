@@ -27,6 +27,7 @@ function mats() {
     knuckle: new THREE.MeshStandardMaterial({ color: 0x141412, roughness: 0.6 }),
     sleeve: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, map: camo }),
   };
+  for (const k of ['metal', 'poly', 'fde', 'glove', 'steel']) wetGun(MATS[k], k === 'glove' ? 90 : 150);
   return MATS;
 }
 
@@ -46,6 +47,30 @@ const M = (geoms, mat) => { const m = new THREE.Mesh(mergeGeometries(geoms.map(g
 
 function reticleTex() { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,60,40,1)'); gr.addColorStop(0.12, 'rgba(255,40,30,0.9)'); gr.addColorStop(0.3, 'rgba(255,20,10,0.15)'); gr.addColorStop(1, 'rgba(255,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); }
 let RET = null;
+let MARK = null;
+function markTex() {
+  if (MARK) return MARK; const c = document.createElement('canvas'); c.width = 512; c.height = 100; const g = c.getContext('2d');
+  g.fillStyle = 'rgba(190,192,188,0.85)'; g.font = '600 34px "Oswald", Arial, sans-serif'; g.fillText('YF-15  CAL 5.56 NATO', 8, 40);
+  g.font = '500 24px Arial, sans-serif'; g.fillText('SN 0417-NY  ·  NORTH YORK ARMS', 8, 78); g.fillText('SAFE  SEMI  AUTO', 340, 40);
+  MARK = new THREE.CanvasTexture(c); MARK.colorSpace = THREE.SRGBColorSpace; MARK.anisotropy = 4; return MARK;
+}
+// rain droplets beaded on the gun after the shower: cellular dots in object space, glossy and slightly domed
+function wetGun(mat, size = 140) {
+  mat.onBeforeCompile = sh => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vOp;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvOp = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+      varying vec3 vOp; float gDrop; vec3 gDn;
+      float dh(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      { vec3 q = vOp * ${size.toFixed(1)}; vec3 c = floor(q); vec3 f = fract(q) - 0.5; float h = dh(c); vec3 o = vec3(dh(c + 1.3), dh(c + 2.7), dh(c + 4.1)) - 0.5;
+        vec3 d = f - o * 0.5; float r = 0.12 + 0.22 * dh(c + 7.7); float dist = length(d); gDrop = step(0.55, h) * (1.0 - smoothstep(r * 0.75, r, dist)); gDn = d / max(r, 1e-3);
+        roughnessFactor = mix(roughnessFactor, 0.04, gDrop); diffuseColor.rgb *= mix(1.0, 0.75, gDrop); }`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      normal = normalize(normal + (viewMatrix * vec4(gDn, 0.0)).xyz * gDrop * 0.6);`);
+  };
+  mat.customProgramCacheKey = () => 'wetgun' + size;
+  return mat;
+}
 
 // ---------- hands ----------
 function hand(side, curl = 1) { // fist shape around a vertical grip, palm facing -x for right hand
@@ -102,13 +127,21 @@ export function buildRifle() {
   g.add(M([boxU(0.02, 0.012, 0.47, 0.49, 0.072), boxU(0.02, 0.012, 0.02, 0.04, 0.072)], m.metal));
   // red dot sight: mount + tube + lenses + reticle
   const dotV = 0.106, du0 = 0.07, du1 = 0.175;
-  g.add(M([boxU(0.024, 0.024, 0.085, 0.16, 0.078), boxU(0.03, 0.008, 0.09, 0.155, 0.072)], m.metal));
-  const tube = new THREE.CylinderGeometry(0.021, 0.021, du1 - du0, 24, 1, true); tube.rotateX(-Math.PI / 2); tube.translate(0, dotV, -(du0 + du1) / 2);
-  const tubeM = new THREE.Mesh(tube, m.metal); tubeM.material = m.metal.clone(); tubeM.material.side = THREE.DoubleSide; g.add(tubeM);
-  { const caps = []; for (const [a0, a1] of [[du0, du0 + 0.012], [du1 - 0.012, du1]]) { const c = new THREE.CylinderGeometry(0.0245, 0.0245, a1 - a0, 24, 1, true); c.rotateX(-Math.PI / 2); c.translate(0, dotV, -(a0 + a1) / 2); caps.push(c); for (const u of [a0, a1]) { const rr = new THREE.RingGeometry(0.0205, 0.0245, 24); rr.translate(0, dotV, -u); caps.push(rr); } } const cm = M(caps, m.rubber); cm.material = m.rubber.clone(); cm.material.side = THREE.DoubleSide; g.add(cm); }
-  const ring = []; for (const u of [du0 + 0.006, du1 - 0.006]) { const r = new THREE.RingGeometry(0.0205, 0.0245, 24); r.translate(0, 0, 0); r.translate(0, dotV, -u); ring.push(r); }
-  const lens = new THREE.CircleGeometry(0.0205, 24); lens.translate(0, dotV, -(du1 - 0.004)); g.add(new THREE.Mesh(lens, m.glass));
-  g.add(M([cylZ(0.006, 0.006, 0.105, 0.125, dotV + 0.025, 10), cylZ(0.006, 0.006, 0.11, 0.13, dotV, 10, 0.025)], m.metal)); // turrets
+  // holographic sight (EOTech-style box, as on Saltline's carbine): base with battery tray, hood over the window,
+  // side buttons; the window is a thin glass pane with the reticle floating in it
+  g.add(M([boxU(0.034, 0.016, 0.06, 0.175, 0.074, 0, 0.003),
+    boxU(0.006, 0.05, 0.068, 0.172, dotV - 0.004, -0.0185, 0.002), boxU(0.006, 0.05, 0.068, 0.172, dotV - 0.004, 0.0185, 0.002),
+    boxU(0.043, 0.007, 0.064, 0.176, dotV + 0.024, 0, 0.003),
+    boxU(0.03, 0.012, 0.16, 0.176, dotV - 0.018, 0, 0.002),
+    boxU(0.03, 0.012, 0.064, 0.08, dotV - 0.018, 0, 0.002)], m.metal));
+  g.add(M([boxU(0.008, 0.008, 0.085, 0.097, 0.075, 0.021, 0.002), boxU(0.008, 0.008, 0.1, 0.112, 0.075, 0.021, 0.002), boxU(0.01, 0.012, 0.13, 0.15, 0.075, -0.022, 0.003)], m.rubber));
+  { const pane = new THREE.PlaneGeometry(0.03, 0.034); pane.translate(0, dotV, -(du1 - 0.004)); g.add(new THREE.Mesh(pane, m.glass)); const p2 = new THREE.PlaneGeometry(0.03, 0.034); p2.translate(0, dotV, -(du0 + 0.008)); g.add(new THREE.Mesh(p2, m.glass)); }
+  // weapon light on the right side of the handguard: body, knurled bezel, lens
+  { const lx = 0.032, lv = 0.008, l0 = 0.39, l1 = 0.48; const parts = [cylZ(0.0115, 0.0115, l0, l1, lv, 18, lx), cylZ(0.0135, 0.0135, l1, l1 + 0.022, lv, 18, lx), boxU(0.01, 0.018, l0 + 0.02, l0 + 0.06, lv, lx - 0.012, 0.002)];
+    for (let k = 0; k < 10; k++) parts.push(cylZ(0.0142, 0.0142, l1 + 0.002 + k * 0.002, l1 + 0.003 + k * 0.002, lv, 18, lx)); g.add(M(parts, m.metal));
+    const lens = new THREE.CircleGeometry(0.011, 18); lens.translate(lx, lv, -(l1 + 0.0225)); g.add(new THREE.Mesh(lens, new THREE.MeshStandardMaterial({ color: 0xdde6ea, roughness: 0.05, metalness: 0.2, emissive: 0x8899aa, emissiveIntensity: 0.15 }))); }
+  // laser-etched markings on the lower receiver (both sides)
+  { const mk = markTex(); for (const sx of [1, -1]) { const pl = new THREE.PlaneGeometry(0.11, 0.022); pl.rotateY(sx * Math.PI / 2); pl.translate(sx * 0.0125, -0.012, -0.12); g.add(new THREE.Mesh(pl, new THREE.MeshStandardMaterial({ map: mk, transparent: true, roughness: 0.6, metalness: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }))); } }
   RET = RET || reticleTex();
   const ret = new THREE.Mesh(new THREE.PlaneGeometry(0.0045, 0.0045), new THREE.MeshBasicMaterial({ map: RET, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
   ret.position.set(0, dotV, -(du1 - 0.01)); g.add(ret);
