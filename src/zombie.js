@@ -8,21 +8,20 @@ const B = n => 'mixamorig' + n;
 
 export async function loadZombieAssets(onProgress) {
   const loader = new GLTFLoader();
-  // The models are glTF JSON with images inside the binary buffer. GLTFLoader turns those into blob: URLs, which
-  // iOS refuses inside the artifact sandbox ("Couldn't load texture"), so rewrite them as data: URIs first.
-  const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+  // iOS refuses blob: and data: URLs for buffers and images inside the claude.ai artifact sandbox. The models are glTF
+  // JSON with the buffer inlined as base64 and images as plain files in chars/ (tools/split_char_images.py), so the
+  // buffer is decoded here and handed to GLTFLoader as an in-memory GLB: no blob:/data: fetch ever happens.
   const load = async url => {
-    const resp = await fetch(url); const total = +resp.headers.get('content-length') || 0;
-    const txt = await resp.text(); if (onProgress) onProgress({ loaded: txt.length, total: total || txt.length });
-    const json = JSON.parse(txt);
-    const buf = json.buffers && json.buffers[0]; let bin = null;
-    if (buf && buf.uri && buf.uri.startsWith('data:')) { const raw = atob(buf.uri.slice(buf.uri.indexOf(',') + 1)); bin = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) bin[i] = raw.charCodeAt(i); }
-    if (bin) for (const im of json.images || []) {
-      if (im.bufferView === undefined) continue; const bv = json.bufferViews[im.bufferView];
-      const bytes = bin.subarray(bv.byteOffset || 0, (bv.byteOffset || 0) + bv.byteLength);
-      im.uri = 'data:' + (im.mimeType || 'image/png') + ';base64,' + b64(bytes); delete im.bufferView;
-    }
-    return new Promise((res, rej) => loader.parse(JSON.stringify(json), '', res, rej));
+    const resp = await fetch(url); const txt = await resp.text(); if (onProgress) onProgress({ loaded: txt.length, total: txt.length });
+    const json = JSON.parse(txt); const buf = json.buffers[0];
+    const raw = atob(buf.uri.slice(buf.uri.indexOf(',') + 1)); const bin = new Uint8Array(raw.length); for (let k = 0; k < raw.length; k++) bin[k] = raw.charCodeAt(k);
+    delete buf.uri; buf.byteLength = bin.length;
+    const jb = new TextEncoder().encode(JSON.stringify(json)); const jl = (jb.length + 3) & ~3, bl = (bin.length + 3) & ~3;
+    const glb = new Uint8Array(12 + 8 + jl + 8 + bl); const dv = new DataView(glb.buffer);
+    dv.setUint32(0, 0x46546C67, true); dv.setUint32(4, 2, true); dv.setUint32(8, glb.length, true);
+    dv.setUint32(12, jl, true); dv.setUint32(16, 0x4E4F534A, true); glb.set(jb, 20); for (let k = 20 + jb.length; k < 20 + jl; k++) glb[k] = 0x20;
+    const bo = 20 + jl; dv.setUint32(bo, bl, true); dv.setUint32(bo + 4, 0x004E4942, true); glb.set(bin, bo + 8);
+    return new Promise((res, rej) => loader.parse(glb.buffer, '', res, rej));
   };
   const [sol, mic] = await Promise.all([load('Soldier.json'), load('Michelle.json')]);
   const clips = {};
