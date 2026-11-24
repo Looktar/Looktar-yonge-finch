@@ -215,13 +215,13 @@ function buildRoads(roads, tex) {
       if (r.oneway) { if (!fwd) continue; o0 = -w / 2 + 0.3; o1 = w / 2 - 0.3; }
       else if (fwd) { o0 = 0.3; o1 = w / 2 - 0.3; } else { o0 = -w / 2 + 0.3; o1 = -0.3; }
       const at = (along, o) => [q.x - q.uz * o + ux * along, q.z + q.ux * o + uz * along];
-      quadOut(solid, at(-1.0, o0), at(-1.0, o1), at(-0.55, o1), at(-0.55, o0), null, 0.046);
+      quadOut(solid, at(-4.4, o0), at(-4.4, o1), at(-3.95, o1), at(-3.95, o0), null, 0.046); // behind the crosswalk, which OSM puts a few metres out
       // arrows, 9 m behind the bar, one per approach lane; the lane nearest the centre turns left
       const nL = Math.max(1, Math.round((o1 - o0) / 3.3)); const lwA = (o1 - o0) / nL;
       for (let k = 0; k < nL; k++) {
         const oc = o0 + lwA * (k + 0.5); const nearCentre = r.oneway ? k === 0 : (fwd ? k === 0 : k === nL - 1);
         const cell = nearCentre && nL >= 2 ? 1 : 0; const u0 = cell * 0.5, u1 = u0 + 0.5;
-        const A = at(-11.5, oc - 0.55), B = at(-11.5, oc + 0.55), C = at(-6.5, oc + 0.55), D = at(-6.5, oc - 0.55);
+        const A = at(-15.5, oc - 0.55), B = at(-15.5, oc + 0.55), C = at(-10.5, oc + 0.55), D = at(-10.5, oc - 0.55);
         // arrow texture points along +v; v runs from the far end (-11.5) to the bar end (-6.5)
         const flip = (fwd ? 1 : -1) * (r.oneway ? 1 : 1) < 0;
         quadOut(arrows, A, B, C, D, flip ? [[u1, 0], [u0, 0], [u0, 1], [u1, 1]] : [[u0, 0], [u1, 0], [u1, 1], [u0, 1]], 0.046);
