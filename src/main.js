@@ -600,10 +600,13 @@ if (HS === 'debug' || QS.has('debug')) {
   const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info');
   const gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
   const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:50%;top:60px;transform:translateX(-50%);z-index:99;background:#000c;color:#eee;font:13px/1.5 sans-serif;padding:8px 10px;border-radius:8px;max-width:92vw;pointer-events:auto';
-  const errs = []; const oe = console.error; console.error = (...a) => { errs.push(String(a[0]).slice(0, 160)); oe(...a); info(); };
+  const errs = []; const note = t => { t = String(t).replace(/\s+/g, ' ').slice(0, 220); if (!errs.includes(t)) { errs.push(t); info(); } };
+  const oe = console.error, ow = console.warn; console.error = (...a) => { note('E ' + a.map(String).join(' ')); oe(...a); }; console.warn = (...a) => { const t = a.map(String).join(' '); if (!/toNonIndexed|stall/.test(t)) note('W ' + t); ow(...a); };
+  addEventListener('error', e => note('X ' + e.message)); addEventListener('unhandledrejection', e => note('P ' + (e.reason && e.reason.message || e.reason)));
   const tog = {}; const T = (k, label, on, off) => { tog[k] = true; const bt = document.createElement('button'); bt.style.cssText = 'margin:3px;padding:6px 10px;font:13px sans-serif;border-radius:6px;border:0'; const paint = () => { bt.textContent = label + (tog[k] ? ' 开' : ' 关'); bt.style.background = tog[k] ? '#ffb35c' : '#555'; }; bt.onclick = e => { e.stopPropagation(); tog[k] = !tog[k]; (tog[k] ? on : off)(); paint(); }; ['touchstart', 'pointerdown', 'mousedown'].forEach(ev => bt.addEventListener(ev, e => e.stopPropagation())); paint(); return bt; };
-  const info = () => { head.textContent = 'GPU: ' + gpu + ' | 画质 ' + (TOUCH ? '手机' : '') + JSON.stringify(Q) + (errs.length ? ' | 错误: ' + errs.slice(-2).join(' / ') : ''); };
-  const head = document.createElement('div'); box.appendChild(head); info();
+  const info = () => { head.textContent = 'GPU: ' + gpu + ' | 画质 ' + (TOUCH ? '手机 ' : '') + JSON.stringify(Q) + ' | 报错 ' + errs.length + ' 条'; list.textContent = errs.slice(0, 8).join('\n'); };
+  const list = document.createElement('pre'); list.style.cssText = 'margin:4px 0;max-height:34vh;overflow:auto;white-space:pre-wrap;font:11px/1.35 monospace;color:#fb8';
+  const head = document.createElement('div'); box.appendChild(head); box.appendChild(list); info();
   const env0 = scene.environment, fog0 = scene.fog;
   const allMats = f => scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(f); });
   box.append(
@@ -615,6 +618,9 @@ if (HS === 'debug' || QS.has('debug')) {
     T('clean', '清理通道', () => { sanitize.enabled = true; }, () => { sanitize.enabled = false; }),
     T('grade', '受伤调色', () => { grade.enabled = true; }, () => { grade.enabled = false; }),
     T('vm', '枪模', () => { window.__noVm = false; }, () => { window.__noVm = true; }),
+    T('shadow', '阴影', () => { sun.castShadow = Q.shadow > 0; allMats(m => m.needsUpdate = true); }, () => { sun.castShadow = false; allMats(m => m.needsUpdate = true); }),
+    T('mirror', '地面反射', () => { Q.refl = 0.45; applyQuality(); }, () => { Q.refl = 0; applyQuality(); }),
+    T('facade', '楼面细节', () => { allMats(m => { if (m.userData.shader) m.userData.shader.uniforms.uWinI.value = 1; }); }, () => { allMats(m => { if (m.userData.shader) m.userData.shader.uniforms.uWinI.value = 0; }); }),
   );
   document.body.appendChild(box);
 }

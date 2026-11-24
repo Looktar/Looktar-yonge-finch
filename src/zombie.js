@@ -8,7 +8,22 @@ const B = n => 'mixamorig' + n;
 
 export async function loadZombieAssets(onProgress) {
   const loader = new GLTFLoader();
-  const load = url => new Promise((res, rej) => loader.load(url, res, onProgress, rej));
+  // The models are glTF JSON with images inside the binary buffer. GLTFLoader turns those into blob: URLs, which
+  // iOS refuses inside the artifact sandbox ("Couldn't load texture"), so rewrite them as data: URIs first.
+  const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+  const load = async url => {
+    const resp = await fetch(url); const total = +resp.headers.get('content-length') || 0;
+    const txt = await resp.text(); if (onProgress) onProgress({ loaded: txt.length, total: total || txt.length });
+    const json = JSON.parse(txt);
+    const buf = json.buffers && json.buffers[0]; let bin = null;
+    if (buf && buf.uri && buf.uri.startsWith('data:')) { const raw = atob(buf.uri.slice(buf.uri.indexOf(',') + 1)); bin = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) bin[i] = raw.charCodeAt(i); }
+    if (bin) for (const im of json.images || []) {
+      if (im.bufferView === undefined) continue; const bv = json.bufferViews[im.bufferView];
+      const bytes = bin.subarray(bv.byteOffset || 0, (bv.byteOffset || 0) + bv.byteLength);
+      im.uri = 'data:' + (im.mimeType || 'image/png') + ';base64,' + b64(bytes); delete im.bufferView;
+    }
+    return new Promise((res, rej) => loader.parse(JSON.stringify(json), '', res, rej));
+  };
   const [sol, mic] = await Promise.all([load('Soldier.json'), load('Michelle.json')]);
   const clips = {};
   for (const c of sol.animations) clips[c.name] = c;
