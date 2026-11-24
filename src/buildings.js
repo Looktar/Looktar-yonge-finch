@@ -418,12 +418,45 @@ export function buildCity(roads, col) {
       const t = (x * dx + z * dz - b._cr.lo) / Math.max(1, b._cr.hi - b._cr.lo);
       return H - b.crown.h * t;
     };
+    // North American Centre towers stand on a two-storey colonnade: the ground floors are set back behind
+    // square granite piers carrying the tower (Street View, Yonge St at Finch)
+    const pod = b.st === ST.NAC && y0 < 1 && H > 40 ? { h: 7.8, d: 2.6 } : null;
     // walls
     for (const e of edges) {
       if (!e) continue;
       const nn = [e.nx, 0, e.nz]; const ta = wallTop(e.a[0], e.a[1]), tq = wallTop(e.q[0], e.q[1]);
       const inf = [seed, b.st, e.front ? 1 : 0, b.fh];
-      gb.face([[e.a[0], y0, e.a[1], e.u0, y0], [e.q[0], y0, e.q[1], e.u0 + e.L, y0], [e.q[0], tq, e.q[1], e.u0 + e.L, tq], [e.a[0], ta, e.a[1], e.u0, ta]], nn, inf, b.wall, b.acc);
+      const yb = pod ? pod.h : y0;
+      gb.face([[e.a[0], yb, e.a[1], e.u0, yb], [e.q[0], yb, e.q[1], e.u0 + e.L, yb], [e.q[0], tq, e.q[1], e.u0 + e.L, tq], [e.a[0], ta, e.a[1], e.u0, ta]], nn, inf, b.wall, b.acc);
+    }
+    if (pod) {
+      // inset footprint (mitred offset of every vertex)
+      const ins = p.map((v, i) => {
+        const ea = edges[(i - 1 + n) % n], eb = edges[i]; if (!ea || !eb) return v;
+        const mx = ea.nx + eb.nx, mz = ea.nz + eb.nz, k = pod.d / Math.max(0.35, 1 + ea.nx * eb.nx + ea.nz * eb.nz);
+        return [v[0] - mx * k, v[1] - mz * k];
+      });
+      const pinf = [seed, ST.PAR, 0, 1], soff = b.wall.clone().multiplyScalar(0.78);
+      let u = 0;
+      for (let i = 0; i < n; i++) {
+        const e = edges[i]; if (!e) continue; const a2 = ins[i], q2 = ins[(i + 1) % n]; const L2 = Math.hypot(q2[0] - a2[0], q2[1] - a2[1]);
+        // recessed lobby glazing (front flag gives it the lit storefront treatment)
+        gb.face([[a2[0], 0, a2[1], u, 0], [q2[0], 0, q2[1], u + L2, 0], [q2[0], pod.h, q2[1], u + L2, pod.h], [a2[0], pod.h, a2[1], u, pod.h]], [e.nx, 0, e.nz], [seed, ST.NAC, 1, 4.3], b.wall, b.acc); u += L2;
+        // soffit
+        gb.face([[e.a[0], pod.h, e.a[1], 0, 0], [e.q[0], pod.h, e.q[1], 0, 0], [q2[0], pod.h, q2[1], 0, 0], [a2[0], pod.h, a2[1], 0, 0]], [0, -1, 0], pinf, soff, white);
+        // spandrel band at the soffit edge
+        gb.face([[e.a[0], pod.h - 0.9, e.a[1], e.u0, pod.h - 0.9], [e.q[0], pod.h - 0.9, e.q[1], e.u0 + e.L, pod.h - 0.9], [e.q[0], pod.h, e.q[1], e.u0 + e.L, pod.h], [e.a[0], pod.h, e.a[1], e.u0, pod.h]], [e.nx, 0, e.nz], pinf, b.wall, white);
+        // piers on the outer line
+        const np = Math.max(1, Math.round(e.L / 7.8));
+        for (let k = 0; k <= np; k++) {
+          if (k === np && edges[(i + 1) % n]) continue; // the next edge places the corner pier
+          const t = k / np, cx = e.a[0] + (e.q[0] - e.a[0]) * t - e.nx * 0.45, cz = e.a[1] + (e.q[1] - e.a[1]) * t - e.nz * 0.45;
+          const hw = 0.45, tx = e.tx * hw, tz = e.tz * hw, nx = e.nx * hw, nz = e.nz * hw;
+          const C4 = [[cx - tx + nx, cz - tz + nz], [cx + tx + nx, cz + tz + nz], [cx + tx - nx, cz + tz - nz], [cx - tx - nx, cz - tz - nz]];
+          for (let j = 0; j < 4; j++) { const A = C4[j], Q = C4[(j + 1) % 4]; const fx = (Q[1] - A[1]) / (2 * hw), fz = -(Q[0] - A[0]) / (2 * hw);
+            gb.face([[A[0], 0, A[1], j * 0.9, 0], [Q[0], 0, Q[1], j * 0.9 + 0.9, 0], [Q[0], pod.h - 0.9, Q[1], j * 0.9 + 0.9, pod.h - 0.9], [A[0], pod.h - 0.9, A[1], j * 0.9, pod.h - 0.9]], [fx, 0, fz], pinf, b.wall, white); }
+        }
+      }
     }
     // roofs
     if (b.roofKind === 'pitched') houseRoof(gb, b, edges, seed);

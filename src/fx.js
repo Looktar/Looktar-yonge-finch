@@ -62,11 +62,23 @@ export function makeSky() {
         c = mix(c, zen, smoothstep(0.25, 0.95, y));
         c += vec3(1.0, 0.55, 0.25) * pow(s, 6.0) * 0.55 + vec3(1.0, 0.72, 0.42) * pow(s, 60.0) * 1.4;
         c += vec3(14.0, 9.0, 5.0) * smoothstep(0.99955, 0.9998, s);
-        // high streaky clouds catching the last light
-        vec2 cp = d.xz / (y + 0.12);
-        float cl = fbm(cp * vec2(0.35, 1.4) + vec2(3.0, 1.0)); cl = smoothstep(0.52, 0.78, cl) * smoothstep(0.015, 0.2, y) * (1.0 - smoothstep(0.55, 0.9, y));
-        vec3 cc = mix(vec3(0.62, 0.42, 0.52), vec3(1.35, 0.62, 0.32), pow(az, 1.6)) * (0.75 + 0.5 * fbm(cp * 3.0));
-        c = mix(c, cc, cl * 0.75);
+        // broken stratocumulus deck (late-November Toronto): dark violet undersides, edges and thin parts lit
+        // orange by the sun just under the deck; plus high cirrus streaks catching the last light
+        vec2 cp = d.xz / (y + 0.07);
+        float wq = fbm(cp * 0.55 + vec2(1.7, 9.2));
+        float n = fbm(cp * 0.9 + wq * 1.6 + vec2(5.0, 2.0));
+        float cov = 0.5 - 0.06 * az;
+        float dens = smoothstep(cov, cov + 0.2, n) * smoothstep(0.015, 0.11, y) * (1.0 - 0.35 * smoothstep(0.5, 0.95, y));
+        float thin = 1.0 - smoothstep(cov + 0.03, cov + 0.26, n);
+        vec3 under = mix(vec3(0.17, 0.15, 0.22), vec3(0.42, 0.27, 0.3), pow(az, 1.4)) * (0.85 + 0.3 * fbm(cp * 2.7));
+        vec3 rim = vec3(1.9, 0.82, 0.34) * (0.25 + 2.2 * pow(s, 4.0)) * pow(az, 1.8);
+        vec3 deck = under + rim * (0.35 + 0.65 * thin);
+        vec2 hp = d.xz / (y + 0.2);
+        float ci = fbm(hp * vec2(0.3, 1.6) + vec2(3.0, 1.0)); ci = smoothstep(0.55, 0.8, ci) * smoothstep(0.05, 0.3, y) * (1.0 - smoothstep(0.6, 0.95, y));
+        c = mix(c, mix(vec3(0.62, 0.45, 0.56), vec3(1.45, 0.7, 0.36), pow(az, 1.4)), ci * 0.5);
+        c = mix(c, deck, dens * 0.93);
+        // warm haze band hugging the horizon
+        c = mix(c, hor * 1.05, (1.0 - smoothstep(0.0, 0.06, y)) * 0.6);
         if (y < 0.0) c = mix(hor * 0.8, vec3(0.16, 0.14, 0.15), smoothstep(0.0, -0.2, y));
         gl_FragColor = vec4(c, 1.0);
       }`,

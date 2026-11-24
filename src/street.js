@@ -149,10 +149,30 @@ export function addStreetscape(scene, ctx) {
     let k = 0;
     stops.forEach(([x, z], i) => { const nr = nearestRoad(roads, x, z, ['res', 'ter', 'sec', 'pri', 'unc', 'ser']); const ang = nr.dir ? Math.atan2(nr.dir[0], nr.dir[1]) + (r() < 0.5 ? 0 : Math.PI) : 0; m4.compose(v.set(x, 0, z), q.setFromEuler(e.set(0, ang, 0)), one); sp.setMatrixAt(k++, m4); so.setMatrixAt(i, m4); col.addPoly([[x - 0.06, z - 0.06], [x + 0.06, z - 0.06], [x + 0.06, z + 0.06], [x - 0.06, z + 0.06]], false); });
     const busG = new THREE.PlaneGeometry(0.45, 0.6).translate(0, 2.25, 0.04);
-    const busSign = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 86; const g = c.getContext('2d'); g.fillStyle = '#e8e8e8'; g.fillRect(0, 0, 64, 86); g.fillStyle = '#1f3c66'; g.fillRect(4, 4, 56, 40); g.fillStyle = '#fff'; g.font = 'bold 22px Arial'; g.textAlign = 'center'; g.fillText('BUS', 32, 32); g.fillStyle = '#333'; g.font = '11px Arial'; g.fillText('STOP', 32, 62); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+    const busSign = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 86; const g = c.getContext('2d'); g.fillStyle = '#f2f2f0'; g.fillRect(0, 0, 64, 86); g.fillStyle = '#da251d'; g.fillRect(0, 0, 64, 34); g.fillStyle = '#fff'; g.font = 'bold 24px Arial'; g.textAlign = 'center'; g.fillText('TTC', 32, 26); g.fillStyle = '#da251d'; g.font = 'bold 12px Arial'; g.fillText('STOP', 32, 54); g.fillStyle = '#222'; g.font = '10px Arial'; g.fillText('36 FINCH W', 32, 74); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
     const bs = new THREE.InstancedMesh(busG, new THREE.MeshStandardMaterial({ map: busSign, roughness: 0.5, side: THREE.DoubleSide }), Math.max(1, D.Q.length));
     D.Q.forEach(([x, z], i) => { const nr = nearestRoad(roads, x, z); const ang = nr.dir ? Math.atan2(nr.dir[0], nr.dir[1]) : 0; m4.compose(v.set(x, 0, z), q.setFromEuler(e.set(0, ang, 0)), one); sp.setMatrixAt(k++, m4); bs.setMatrixAt(i, m4); });
     sp.count = k; for (const m of [sp, so, bs]) { m.instanceMatrix.needsUpdate = true; scene.add(m); }
+    // TTC glass shelters at the stops on arterials: steel frame, glass sides and back, a lit ad panel at one end
+    const sh = [], shGlass = [], shAd = [];
+    for (const [x, z] of D.Q) {
+      const nr = nearestRoad(roads, x, z, ['pri', 'sec']); if (!nr.road || !nr.foot || nr.d > (nr.road.w || 12) / 2 + 6) continue;
+      let ax = x - nr.foot[0], az = z - nr.foot[1]; const L = Math.hypot(ax, az) || 1; ax /= L; az /= L; // away from the road
+      const ang = Math.atan2(nr.dir[0], nr.dir[1]); const cx = x + ax * 1.6, cz = z + az * 1.6;
+      const put = (g, list) => { g.rotateY(ang); if ((-Math.sin(ang) * ax - Math.cos(ang) * az) > 0) g.rotateY(0); g.translate(cx, 0, cz); list.push(g.toNonIndexed()); };
+      // local frame: +z along the road, +x across; back wall on the side away from the road
+      const bx = Math.sign(Math.cos(ang) * ax - Math.sin(ang) * az) || 1;
+      for (const [px, pz] of [[-0.7, -1.8], [-0.7, 1.8], [0.7, -1.8], [0.7, 1.8]]) put(new THREE.BoxGeometry(0.06, 2.4, 0.06).translate(px, 1.2, pz), sh);
+      put(new THREE.BoxGeometry(1.6, 0.08, 3.8).translate(0, 2.42, 0), sh);
+      put(new THREE.BoxGeometry(0.02, 2.0, 3.6).translate(bx * 0.7, 1.15, 0), shGlass);
+      put(new THREE.BoxGeometry(1.4, 2.0, 0.02).translate(0, 1.15, -1.8), shGlass);
+      put(new THREE.BoxGeometry(1.4, 1.75, 0.08).translate(0, 1.1, 1.8), shAd);
+    }
+    if (sh.length) {
+      scene.add(new THREE.Mesh(mergeGeometries(sh), new THREE.MeshStandardMaterial({ color: 0x5c6166, metalness: 0.7, roughness: 0.4 })));
+      scene.add(new THREE.Mesh(mergeGeometries(shGlass), new THREE.MeshStandardMaterial({ color: 0x9fb4b8, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.28, depthWrite: false })));
+      scene.add(new THREE.Mesh(mergeGeometries(shAd), new THREE.MeshStandardMaterial({ color: 0xdfe6ee, emissive: 0xc9d8ff, emissiveIntensity: 0.9, roughness: 0.3 })));
+    }
   }
   return { poles };
 }

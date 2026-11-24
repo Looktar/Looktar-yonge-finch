@@ -203,7 +203,7 @@ function buildRoads(roads, tex) {
   const grp = new THREE.Group();
   if (curb.pos.length) {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(curb.pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(curb.uv, 2)); g.setAttribute('normal', new THREE.Float32BufferAttribute(curb.nrm, 3)); g.computeBoundingSphere();
-    const cm = new THREE.MeshStandardMaterial({ color: 0xb9b7b2, roughness: 0.9, side: THREE.DoubleSide });
+    const cm = new THREE.MeshStandardMaterial({ color: 0x9e9b95, roughness: 0.92, side: THREE.DoubleSide });
     const me = new THREE.Mesh(g, cm); me.matrixAutoUpdate = false; me.receiveShadow = true; grp.add(me);
     const gm = new THREE.MeshStandardMaterial({ color: 0x8e8c88, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -5 });
     const gg = geomFrom(gutter); const gme = new THREE.Mesh(gg, gm); gme.matrixAutoUpdate = false; gme.receiveShadow = true; grp.add(gme);
@@ -371,7 +371,8 @@ export function buildWorld(scene, tex, quality) {
 
   // ---- traffic signals ----
   const sigs = N.split('\n').map(l => l.split('|')).filter(f => f[0] === 'traf').map(f => [+f[1] / 2, +f[2] / 2]);
-  const sigPole = [], sigLamp = [], sigHead = [];
+  const sigPole = [], sigLamp = [], sigHead = [], sigNames = [];
+  const streetLabel = n => n.toUpperCase().replace(/\bSTREET\b/, 'ST').replace(/\bAVENUE\b/, 'AVE').replace(/\bDRIVE\b/, 'DR').replace(/\bROAD\b/, 'RD').replace(/\bBOULEVARD\b/, 'BLVD').replace(/\bCRESCENT\b/, 'CRES').replace(/\bEAST$/, 'E').replace(/\bWEST$/, 'W');
   for (const [x, z] of sigs) {
     // nudge to roadside if on road
     let px = x, pz = z; for (let k = 0; k < 12 && onRoad(px, pz); k++) { px += (r() - 0.5) * 6; pz += (r() - 0.5) * 6; }
@@ -382,6 +383,28 @@ export function buildWorld(scene, tex, quality) {
     for (const g of [g3, g4]) { g.rotateY(ang); g.translate(px, 0, pz); sigHead.push(g.toNonIndexed()); }
     for (const g of [l1, l2]) { g.rotateY(ang); g.translate(px, 0, pz); sigLamp.push(g.toNonIndexed()); }
     col.addPoly([[px - 0.2, pz - 0.2], [px + 0.2, pz - 0.2], [px + 0.2, pz + 0.2], [px - 0.2, pz + 0.2]], false);
+    // Toronto street-name blade on the mast arm, naming the street the arm reaches over
+    const tip = [px + Math.sin(ang) * 4.5, pz + Math.cos(ang) * 4.5];
+    const nr = nearestRoad(roads, tip[0], tip[1], ['pri', 'sec', 'ter', 'res']);
+    if (nr.road && nr.road.name && nr.d < 14) sigNames.push({ px, pz, ang, name: streetLabel(nr.road.name) });
+  }
+  if (sigNames.length) {
+    const names = [...new Set(sigNames.map(sn => sn.name))].slice(0, 16); const RH = 64, CW = 512;
+    const cv = document.createElement('canvas'); cv.width = CW; cv.height = RH * 16; const g = cv.getContext('2d');
+    names.forEach((nm, i) => {
+      const y = i * RH; g.fillStyle = '#1d4f9e'; g.fillRect(0, y, CW, RH); g.strokeStyle = '#f4f4f4'; g.lineWidth = 4; g.strokeRect(5, y + 5, CW - 10, RH - 10);
+      g.fillStyle = '#ffffff'; g.font = 'bold 38px "Helvetica Neue", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(nm, CW / 2, y + RH / 2 + 1, CW - 40);
+    });
+    const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 4;
+    const parts = [];
+    for (const sn of sigNames) {
+      const i = names.indexOf(sn.name); if (i < 0) continue; const v0 = 1 - (i + 1) / 16, v1 = 1 - i / 16;
+      for (const side of [1, -1]) {
+        const pg = new THREE.PlaneGeometry(1.55, 0.3); const uv = pg.attributes.uv; for (let k = 0; k < 4; k++) uv.setY(k, uv.getY(k) > 0.5 ? v1 : v0);
+        pg.rotateY(side * Math.PI / 2).translate(side * 0.07, 6.25, 1.6).rotateY(sn.ang).translate(sn.px, 0, sn.pz); parts.push(pg.toNonIndexed());
+      }
+    }
+    if (parts.length) { const m = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.5, emissive: 0xffffff, emissiveMap: tx, emissiveIntensity: 0.12 })); scene.add(m); }
   }
   const signalMat = new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff2010, emissiveIntensity: 5 });
   if (sigPole.length) { scene.add(new THREE.Mesh(mergeGeometries(sigPole), poleMat)); scene.add(new THREE.Mesh(mergeGeometries(sigHead), new THREE.MeshStandardMaterial({ color: 0xe8b400, roughness: 0.45 }))); /* Toronto's yellow signal heads */ scene.add(new THREE.Mesh(mergeGeometries(sigLamp), signalMat)); }
