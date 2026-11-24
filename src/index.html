@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>央街芬治 · 黄昏</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+/* VOICE: tense, nocturnal, a game HUD, not a web page
+   IDEA: a sunset-lit street sign and a police scanner readout at Yonge & Finch
+   PICTURE: the live 3D intersection itself, full bleed behind everything
+   COLOUR and TYPE: night ink, sodium-lamp amber accent, emergency red; Noto Sans SC + Oswald numerals
+   LAYOUT: title block bottom-left over the scene; HUD hugs the corners */
+:root{color-scheme:dark;--ink:#e9edf0;--dim:#9aa3ab;--amber:#ffb35c;--red:#ff4a3a;--glass:rgba(10,13,17,.62)}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;overflow:hidden;background:#07090c;color:var(--ink);font:16px/1.5 "Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+canvas#c{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+.num{font-family:Oswald,"Noto Sans SC",sans-serif;font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer}
+/* ---- menu ---- */
+#menu,#pause,#over{position:fixed;inset:0;display:flex;align-items:flex-end;padding:clamp(20px,5vw,64px);background:linear-gradient(90deg,rgba(5,7,10,.88) 0%,rgba(5,7,10,.55) 46%,rgba(5,7,10,0) 75%),linear-gradient(0deg,rgba(5,7,10,.7),rgba(5,7,10,0) 45%)}
+#pause,#over{display:none;align-items:center;justify-content:center;background:rgba(5,7,10,.72)}
+#menu,#pause,#over{z-index:10}
+.mbox{max-width:560px}
+.sign{display:inline-flex;gap:10px;align-items:center;margin-bottom:18px}
+.sign span{background:#1b5e3a;color:#fff;border:2px solid #e9edf0;border-radius:6px;padding:4px 12px;font-weight:700;font-size:15px;letter-spacing:.02em}
+.sign span:last-child{background:#1b4f7a}
+h1{font-size:clamp(40px,6vw,64px);line-height:1.02;margin:0 0 6px;font-weight:900;text-wrap:balance}
+h1 em{font-style:normal;color:var(--amber)}
+.sub{color:var(--dim);margin:0 0 22px;font-size:17px;max-width:46ch}
+.keys{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 22px;margin:0 0 22px;font-size:14.5px;color:#c9d0d6}
+.keys b{display:inline-block;min-width:64px;color:var(--ink);font-family:Oswald,sans-serif;font-weight:500;letter-spacing:.02em}
+.opts{display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-bottom:24px;font-size:14.5px;color:#c9d0d6}
+.seg{display:inline-flex;border:1px solid #3a434b;border-radius:8px;overflow:hidden}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{padding:8px 14px;cursor:pointer;min-height:40px;display:flex;align-items:center}
+.seg input:checked+label{background:var(--amber);color:#1a1206;font-weight:700}
+.seg input:focus-visible+label{outline:2px solid #fff;outline-offset:-2px}
+input[type=range]{accent-color:var(--amber);width:120px}
+.go{background:var(--amber);color:#1a1206;border:0;border-radius:10px;padding:14px 34px;font-size:19px;font-weight:900;min-height:52px;box-shadow:0 0 0 0 rgba(255,179,92,.5);animation:pulse 2.4s infinite}
+.go:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.go:disabled{opacity:.65;cursor:wait;animation:none}
+@keyframes pulse{50%{box-shadow:0 0 0 12px rgba(255,179,92,0)}}
+@media (prefers-reduced-motion:reduce){.go{animation:none}}
+.credit{margin-top:22px;font-size:13px;color:#7f8991;max-width:60ch}
+.credit a{color:#aeb7be}
+.mobile{display:none;color:var(--amber);font-weight:700;margin-bottom:14px}
+@media (hover:none) and (pointer:coarse){.mobile{display:block}}
+/* ---- HUD ---- */
+#hud{display:none;position:fixed;inset:0;pointer-events:none;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+#loc{position:absolute;left:24px;top:20px;font-weight:700;font-size:17px;background:var(--glass);padding:7px 14px;border-left:4px solid #1b5e3a;border-radius:4px}
+#stats{position:absolute;left:24px;top:62px;font-size:14px;color:var(--dim)}
+#stats b{color:var(--ink);font-family:Oswald,sans-serif;font-size:18px;margin:0 12px 0 4px}
+#cmpw{position:absolute;left:50%;top:16px;transform:translateX(-50%);width:300px;text-align:center}
+#cmp{height:26px;background-repeat:repeat-x;-webkit-mask:linear-gradient(90deg,transparent,#000 25%,#000 75%,transparent);mask:linear-gradient(90deg,transparent,#000 25%,#000 75%,transparent)}
+#hdg{font-size:12px;color:var(--amber);font-family:Oswald,sans-serif}
+#wave{position:absolute;left:50%;top:66px;transform:translateX(-50%);text-align:center}
+#wv{font-size:20px;font-weight:900;color:var(--amber)}
+#zl{font-size:14px;color:#d5dbe0;margin-left:10px}
+#next{font-size:15px;color:#d5dbe0;margin-top:2px}
+#mmw{position:absolute;right:22px;top:18px;width:184px;height:184px;border-radius:50%;border:2px solid rgba(233,237,240,.35);background:#0d1012;box-shadow:0 0 0 4px rgba(0,0,0,.3)}
+#mm{width:180px;height:180px;display:block}
+#mmw i{position:absolute;left:50%;top:-4px;transform:translateX(-50%);font-style:normal;font-size:12px;font-weight:700;color:var(--amber)}
+#fps{position:absolute;right:26px;top:208px;font-size:12px;color:#6c757d;font-family:Oswald,sans-serif}
+#hpw{position:absolute;left:24px;bottom:24px;width:min(300px,40vw)}
+.lbl{font-size:13px;color:var(--dim);display:flex;justify-content:space-between;align-items:baseline}
+.lbl .num{font-size:28px;color:var(--ink);font-weight:700}
+.bar{height:10px;background:rgba(255,255,255,.12);border-radius:5px;overflow:hidden;margin-top:2px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#c9302a,#ff6a4a);transition:width .15s}
+.bar.st{height:4px;margin-top:6px}.bar.st i{background:#d5dbe0;transition:none}
+#ammo{position:absolute;right:26px;bottom:22px;text-align:right}
+#wn{font-size:14px;color:var(--dim)}
+#am{font-size:52px;line-height:1;font-weight:700}
+#rs{font-size:22px;color:var(--dim)}
+#hint{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);font-size:12.5px;color:#7f8991;white-space:nowrap}
+#xh{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%)}
+#xh:before,#xh:after{content:"";position:absolute;background:rgba(255,255,255,.85);box-shadow:0 0 2px #000}
+#xh:before{left:10px;top:0;width:2px;height:22px;clip-path:polygon(0 0,100% 0,100% 30%,0 30%,0 70%,100% 70%,100% 100%,0 100%)}
+#xh:after{top:10px;left:0;height:2px;width:22px;clip-path:polygon(0 0,30% 0,30% 100%,0 100%,0 0,70% 0,100% 0,100% 100%,70% 100%)}
+#hm{position:absolute;left:50%;top:50%;width:30px;height:30px;transform:translate(-50%,-50%) rotate(45deg);opacity:0}
+#hm:before,#hm:after{content:"";position:absolute;background:#fff}
+#hm:before{left:14px;top:0;width:2px;height:30px;clip-path:polygon(0 0,100% 0,100% 30%,0 30%,0 70%,100% 70%,100% 100%,0 100%)}
+#hm:after{top:14px;left:0;height:2px;width:30px;clip-path:polygon(0 0,30% 0,30% 100%,0 100%,0 0,70% 0,100% 0,100% 100%,70% 100%)}
+#hm.on{opacity:1}#hm.head:before,#hm.head:after{background:var(--red)}
+#banner{position:absolute;left:0;right:0;top:30%;text-align:center;opacity:0;transition:opacity .6s}
+#bn1{font-size:clamp(36px,5vw,52px);font-weight:900;letter-spacing:.04em}
+#bn2{font-size:17px;color:#cfd6db}
+#edge{position:absolute;left:50%;top:40%;transform:translateX(-50%);background:rgba(120,10,0,.7);padding:8px 18px;border-radius:6px;font-weight:700;opacity:0;transition:opacity .3s}
+#nolock{display:none;position:absolute;left:50%;top:58%;transform:translateX(-50%);font-size:14px;background:var(--glass);padding:6px 14px;border-radius:6px;color:var(--amber)}
+/* ---- over / pause ---- */
+.card{background:rgba(12,15,19,.9);border:1px solid #2a3138;border-radius:14px;padding:32px clamp(20px,4vw,40px);max-width:560px;width:100%;text-align:center}
+.card h2{font-size:clamp(32px,5vw,44px);margin:0 0 4px;font-weight:900;line-height:1.05}
+.card p{color:var(--dim);margin:0 0 22px}
+#ov-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:26px}
+#ov-stats div{background:rgba(255,255,255,.04);border-radius:10px;padding:12px}
+#ov-stats b{display:block;font-family:Oswald,sans-serif;font-size:34px;line-height:1.1;color:var(--amber)}
+#ov-stats span{font-size:13px;color:var(--dim)}
+
+/* ---- touch controls ---- */
+:root{--sat:env(safe-area-inset-top,0px);--sar:env(safe-area-inset-right,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px)}
+#touch{display:none;position:fixed;inset:0;z-index:5;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#tzone{position:absolute;inset:0;touch-action:none}
+#joyBase{position:absolute;left:0;top:0;border-radius:50%;border:2px solid rgba(233,237,240,.28);background:radial-gradient(circle,rgba(255,255,255,.07),rgba(255,255,255,.02));pointer-events:none;opacity:.55;transition:opacity .15s}
+#joyBase.on{opacity:1}#joyBase.sprint{border-color:var(--amber)}
+#joyKnob{position:absolute;left:0;top:0;width:56px;height:56px;border-radius:50%;background:rgba(233,237,240,.32);box-shadow:0 0 0 2px rgba(255,255,255,.25) inset;pointer-events:none}
+.tb{position:absolute;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(12,15,19,.42);border:2px solid rgba(233,237,240,.3);color:#e9edf0;font:700 13px/1 "Noto Sans SC",sans-serif;touch-action:none;-webkit-tap-highlight-color:transparent}
+.tb svg{width:46%;height:46%;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.tb.on{background:rgba(255,179,92,.35);border-color:var(--amber)}.tb.lit{border-color:var(--amber);color:var(--amber)}
+#tFire{width:96px;height:96px;right:calc(28px + var(--sar));bottom:calc(64px + var(--sab));border-color:rgba(255,74,58,.7)}
+#tFire svg{stroke:#ff6a55}
+#tAds{width:64px;height:64px;right:calc(140px + var(--sar));bottom:calc(150px + var(--sab))}
+#tReload{width:56px;height:56px;right:calc(150px + var(--sar));bottom:calc(64px + var(--sab))}
+#tJump{width:56px;height:56px;right:calc(36px + var(--sar));bottom:calc(178px + var(--sab))}
+#tSwap{width:52px;height:52px;right:calc(108px + var(--sar));bottom:calc(230px + var(--sab))}
+#tLight{width:44px;height:44px;right:calc(220px + var(--sar));bottom:calc(22px + var(--sab))}
+#tPause{width:44px;height:44px;left:50%;top:calc(10px + var(--sat));transform:translateX(160px)}
+#rotate{display:none;position:fixed;inset:0;z-index:20;background:#07090c;color:var(--ink);align-items:center;justify-content:center;flex-direction:column;gap:14px;text-align:center;padding:24px}
+#rotate svg{width:64px;height:64px;stroke:var(--amber);fill:none;stroke-width:2}
+@media (orientation:portrait) and (pointer:coarse){body.playing #rotate{display:flex}}
+body.touch #hint{display:none}
+body.touch #ammo{bottom:calc(10px + var(--sab));right:calc(290px + var(--sar))}
+body.touch #ammo #am{font-size:34px}
+body.touch #hpw{left:calc(16px + var(--sal));top:calc(100px + var(--sat));bottom:auto;width:180px}
+body.touch #loc{left:calc(16px + var(--sal));top:calc(10px + var(--sat));font-size:13px;padding:5px 10px}
+body.touch #stats{left:calc(16px + var(--sal));top:calc(46px + var(--sat));font-size:12px}
+body.touch #mmw{width:112px;height:112px;right:calc(12px + var(--sar));top:calc(10px + var(--sat))}
+body.touch #mm{width:108px;height:108px}
+body.touch #fps{top:calc(126px + var(--sat));right:calc(14px + var(--sar))}
+body.touch #wave{top:calc(52px + var(--sat))}
+body.touch #cmpw{top:calc(8px + var(--sat));width:220px}
+body.touch #bn1{font-size:30px}
+body.touch #nolock{display:none!important}
+.keys .tk{display:none}body.touch .keys .kb{display:none}body.touch .keys .tk{display:block}
+@media (max-height:500px){#menu{padding:14px calc(20px + var(--sal));align-items:flex-start;overflow-y:auto}#menu .sign{display:none}.sub{font-size:14px;margin-bottom:10px}h1{font-size:34px}.keys{font-size:13px;margin-bottom:10px;gap:2px 16px}.opts{margin-bottom:12px}.credit{margin-top:10px;font-size:11px}.sign{margin-bottom:8px}.go{padding:10px 26px;min-height:44px}}
+
+@media(max-width:600px){.keys{grid-template-columns:minmax(0,1fr)}#mmw{width:124px;height:124px}#mm{width:120px;height:120px}#fps{top:146px}#hint{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="menu">
+  <div class="mbox">
+    <div class="sign"><span>Yonge St</span><span>Finch Ave</span></div>
+    <h1>央街 · 芬治<br><em>黄昏</em></h1>
+    <p class="sub">北约克，十一月的傍晚，太阳正落在芬治大道西头。地铁站已经封锁，你被困在央街和芬治大道的路口。街道、楼宇、公园都按真实地图 1:1 还原。</p>
+    
+    <div class="keys">
+      <div class="tk"><b>左半屏</b>摇杆移动，推到边缘冲刺</div><div class="tk"><b>右半屏</b>拖动转向</div>
+      <div class="tk"><b>红色键</b>按住开火，可边按边瞄</div><div class="tk"><b>小按钮</b>开镜 / 换弹 / 跳 / 换枪 / 手电</div>
+      <div class="kb"><b>WASD</b>移动</div><div class="kb"><b>鼠标</b>左键开火 / 右键开镜</div>
+      <div class="kb"><b>Shift</b>冲刺</div><div class="kb"><b>空格</b>跳</div>
+      <div class="kb"><b>R</b>换弹</div><div class="kb"><b>1 2 3</b>步枪 / 霰弹 / 手枪</div>
+      <div class="kb"><b>F</b>手电筒</div><div class="kb"><b>Esc</b>暂停</div>
+    </div>
+    <div class="opts">
+      <span>画质</span>
+      <span class="seg">
+        <input type="radio" name="q" id="q-low" value="low"><label for="q-low">低</label>
+        <input type="radio" name="q" id="q-mid" value="mid" checked><label for="q-mid">中</label>
+        <input type="radio" name="q" id="q-high" value="high"><label for="q-high">高</label>
+      </span>
+      <label>灵敏度 <input type="range" id="sens" min="0.4" max="2.2" step="0.1" value="1"></label>
+    </div>
+    <button class="go" id="start">进入路口</button>
+    <div class="credit">样品版本：路口周边约 380 米半径可玩。街道、建筑轮廓与街道设施 © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 贡献者（ODbL）；楼高来自多伦多市 3D Massing 2025 激光雷达数据，行道树来自多伦多市 Street Tree Data（Open Government Licence – Toronto）；角色模型为 three.js 示例中的 Mixamo 角色。</div>
+  </div>
+</div>
+
+<div id="hud">
+  <div id="loc">央街 Yonge St</div>
+  <div id="stats">击杀<b id="kl" class="num">0</b>得分<b id="sc" class="num">0</b></div>
+  <div id="cmpw"><div id="cmp"></div><div id="hdg">0°</div></div>
+  <div id="wave"><span id="wv">准备</span><span id="zl"></span><div id="next"></div></div>
+  <div id="mmw"><canvas id="mm" width="180" height="180"></canvas><i>▲</i></div>
+  <div id="fps"></div>
+  <div id="hpw">
+    <div class="lbl"><span>生命</span><span class="num" id="hpn">100</span></div>
+    <div class="bar"><i id="hp" style="width:100%"></i></div>
+    <div class="bar st"><i id="st" style="width:100%"></i></div>
+  </div>
+  <div id="ammo"><div id="wn">突击步枪</div><span id="am" class="num">30</span> <span id="rs" class="num">150</span></div>
+  <div id="hint">右键 开镜 · 1/2/3 换枪 · R 换弹 · F 手电 · Shift 冲刺 · Esc 暂停</div>
+  <div id="xh"></div><div id="hm"></div>
+  <div id="banner"><div id="bn1"></div><div id="bn2"></div></div>
+  <div id="edge">前方是封锁线，回到路口附近</div>
+  <div id="nolock">鼠标锁定被浏览器拒绝：按住鼠标拖动来转向，Q / E 也可以转向</div>
+</div>
+
+<div id="touch"><div id="tzone"></div><div id="joyBase"></div><div id="joyKnob"></div>
+  <div class="tb" id="tFire" aria-label="开火"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg></div>
+  <div class="tb" id="tAds" aria-label="开镜"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/></svg></div>
+  <div class="tb" id="tReload" aria-label="换弹"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></div>
+  <div class="tb" id="tJump" aria-label="跳"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></div>
+  <div class="tb" id="tSwap" aria-label="换枪"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></div>
+  <div class="tb" id="tLight" aria-label="手电"><svg viewBox="0 0 24 24"><path d="M9 3h6l-1 6h-4zM10 9h4v12h-4z"/></svg></div>
+  <div class="tb" id="tPause" aria-label="暂停"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg></div>
+</div>
+<div id="rotate"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M3 15a9 9 0 0 0 9 7"/></svg><b>请把手机横过来</b><span style="color:var(--dim)">横屏才能看到完整的街景和按钮</span></div>
+<div id="pause"><div class="card"><h2>已暂停</h2><p>天快黑了。它们没走。</p><button class="go" id="resume">继续</button></div></div>
+<div id="over"><div class="card"><h2>你倒在了芬治站</h2><p>路口失守。</p><div id="ov-stats"></div><button class="go" id="again">再来一局</button></div></div>
+
+<script>/*GAME*/</script>
+</body>
+</html>

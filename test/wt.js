@@ -1,0 +1,12 @@
+import * as THREE from 'three';
+import { buildRifle, buildShotgun, buildPistol } from '../src/weapons.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+const r = new THREE.WebGLRenderer({antialias:true}); r.setSize(1200,700); document.body.appendChild(r.domElement); r.toneMapping=THREE.ACESFilmicToneMapping;
+const s = new THREE.Scene(); s.background=new THREE.Color(0x3a3f46); s.environment=new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(),0.04).texture; s.environmentIntensity=0.6;
+s.add(new THREE.HemisphereLight(0xffffff,0x333333,1.2)); const d=new THREE.DirectionalLight(0xffffff,2.5); d.position.set(2,3,1); s.add(d);
+const cam=new THREE.PerspectiveCamera(30,12/7,0.01,20);
+const guns=[buildRifle(),buildShotgun(),buildPistol()]; guns.forEach(g=>s.add(g));
+window.side=(i)=>{guns.forEach((g,k)=>g.visible=k===i); cam.fov=30; cam.position.set(1.6,0.0,-0.18); cam.lookAt(0,-0.03,-0.18); cam.updateProjectionMatrix(); r.render(s,cam); return 1};
+window.top3=(i)=>{guns.forEach((g,k)=>g.visible=k===i); cam.fov=35; cam.position.set(0.9,0.6,0.6); cam.lookAt(0,-0.03,-0.15); cam.updateProjectionMatrix(); r.render(s,cam); return 1};
+window.fp=(i,ads)=>{guns.forEach((g,k)=>{g.visible=k===i; g.position.set(0,0,0); g.rotation.set(0,0,0);}); const g=guns[i]; const u=g.userData; cam.fov=ads?u.fov:72; cam.position.set(0,0,0); cam.rotation.set(0,0,0); cam.updateProjectionMatrix(); if(ads) g.position.set(-u.sight.x,-u.sight.y,u.adsZ-u.sight.z); else g.position.copy(u.hip); r.render(s,cam); return 1};
+window.ready=true;

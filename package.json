@@ -1,0 +1,18 @@
+{
+  "name": "yonge-finch-dusk",
+  "version": "1.0.0",
+  "description": "央街·芬治 黄昏：浏览器 3D 第一人称打僵尸，1:1 还原多伦多 Yonge × Finch",
+  "scripts": {
+    "build": "python3 build.py",
+    "serve": "cd dist && python3 -m http.server 8765"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "three": "^0.170.0"
+  },
+  "type": "module",
+  "private": true
+}
