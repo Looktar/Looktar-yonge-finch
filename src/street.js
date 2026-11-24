@@ -198,7 +198,12 @@ export function addStreetscape(scene, ctx) {
     if (sh.length) {
       scene.add(new THREE.Mesh(mergeGeometries(sh), new THREE.MeshStandardMaterial({ color: 0x5c6166, metalness: 0.7, roughness: 0.4 })));
       scene.add(new THREE.Mesh(mergeGeometries(shGlass), new THREE.MeshStandardMaterial({ color: 0x9fb4b8, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.28, depthWrite: false })));
-      scene.add(new THREE.Mesh(mergeGeometries(shAd), new THREE.MeshStandardMaterial({ color: 0xdfe6ee, emissive: 0xc9d8ff, emissiveIntensity: 0.9, roughness: 0.3 })));
+      const ac = document.createElement('canvas'); ac.width = 256; ac.height = 320; const ag = ac.getContext('2d');
+      const gr = ag.createLinearGradient(0, 0, 0, 320); gr.addColorStop(0, '#c8442f'); gr.addColorStop(1, '#5a1630'); ag.fillStyle = gr; ag.fillRect(0, 0, 256, 320);
+      ag.fillStyle = '#ffffff'; ag.font = 'bold 40px "Helvetica Neue", Arial, sans-serif'; ag.fillText('WINTER', 24, 70); ag.fillText('IS COMING', 24, 116);
+      ag.font = '22px "Helvetica Neue", Arial, sans-serif'; ag.fillText('Parkas & boots — 40% off', 24, 160); ag.fillStyle = '#f6d36b'; ag.fillRect(24, 250, 150, 44); ag.fillStyle = '#5a1630'; ag.font = 'bold 22px Arial'; ag.fillText('SHOP NOW', 40, 280);
+      const at = new THREE.CanvasTexture(ac); at.colorSpace = THREE.SRGBColorSpace;
+      scene.add(new THREE.Mesh(mergeGeometries(shAd), new THREE.MeshStandardMaterial({ map: at, emissiveMap: at, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.3 })));
     }
   }
   return { poles };

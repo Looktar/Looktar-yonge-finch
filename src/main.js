@@ -48,7 +48,7 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   gl_FragColor.rgb = mix(gl_FragColor.rgb, fogC, fogFactor);
 #endif`;
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x9c8f9a, 0.0027);
+scene.fog = new THREE.FogExp2(0x9c8f9a, 0.0019);
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 700);
 camera.rotation.order = 'YXZ'; scene.add(camera);
 const sky = makeSky(); scene.add(sky);
