@@ -62,7 +62,7 @@ const col = W.col;
   const es = new THREE.Scene(); const s2 = makeSky(); s2.scale.setScalar(0.2); es.add(s2);
   const gnd = new THREE.Mesh(new THREE.CircleGeometry(80, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x4a4542 })); gnd.position.y = -3; es.add(gnd);
   const r = rng(5); const bg = new THREE.BoxGeometry(1, 1, 1);
-  for (let i = 0; i < 26; i++) { const a = r() * Math.PI * 2, d = 45 + r() * 25, h = 6 + r() * 26; const m = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.16 + r() * 0.12, 0.15 + r() * 0.1, 0.15 + r() * 0.1) })); m.position.set(Math.cos(a) * d, h / 2 - 3, Math.sin(a) * d); m.scale.set(8 + r() * 10, h, 8 + r() * 10); m.lookAt(0, m.position.y, 0); es.add(m); }
+  for (let i = 0; i < 26; i++) { const a = r() * Math.PI * 2, d = 45 + r() * 25, h = 4 + r() * 10; const m = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.16 + r() * 0.12, 0.15 + r() * 0.1, 0.15 + r() * 0.1) })); m.position.set(Math.cos(a) * d, h / 2 - 3, Math.sin(a) * d); m.scale.set(8 + r() * 10, h, 8 + r() * 10); m.lookAt(0, m.position.y, 0); es.add(m); }
   const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(es, 0.015, 0.1, 400).texture; scene.environmentIntensity = 1;
 }
 

@@ -141,6 +141,33 @@ export function addStreetscape(scene, ctx) {
     const im = new THREE.InstancedMesh(hg, new THREE.MeshStandardMaterial({ color: 0xa8141a, roughness: 0.45, metalness: 0.2 }), Math.max(1, hyd.length));
     hyd.forEach(([x, z], i) => { m4.compose(v.set(x, 0, z), q.setFromEuler(e.set(0, r() * 6, 0)), one); im.setMatrixAt(i, m4); col.addPoly([[x - 0.15, z - 0.15], [x + 0.15, z - 0.15], [x + 0.15, z + 0.15], [x - 0.15, z + 0.15]], false); });
     im.instanceMatrix.needsUpdate = true; scene.add(im);
+    // sidewalk furniture on Yonge / Finch: grey-and-green City of Toronto bins, benches, newspaper boxes
+    {
+      const binG = mergeGeometries([new THREE.BoxGeometry(0.62, 1.05, 0.45).translate(0, 0.53, 0), new THREE.BoxGeometry(0.66, 0.08, 0.5).translate(0, 1.09, 0)].map(g => g.toNonIndexed()));
+      const benchG = mergeGeometries([new THREE.BoxGeometry(1.8, 0.06, 0.45).translate(0, 0.45, 0), new THREE.BoxGeometry(1.8, 0.4, 0.05).translate(0, 0.72, -0.22), new THREE.BoxGeometry(0.06, 0.45, 0.4).translate(-0.8, 0.22, 0), new THREE.BoxGeometry(0.06, 0.45, 0.4).translate(0.8, 0.22, 0)].map(g => g.toNonIndexed()));
+      const boxG = new THREE.BoxGeometry(0.5, 1.15, 0.45).translate(0, 0.58, 0);
+      const spots = [];
+      for (const rd of roads) {
+        if (rd.t !== 'pri' && rd.t !== 'sec') continue;
+        for (let i = 0; i < rd.p.length - 1; i++) {
+          const a = rd.p[i], b = rd.p[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); const tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L;
+          for (let s = 6 + r() * 20; s < L - 4; s += 28 + r() * 30) for (const side of [-1, 1]) {
+            if (r() < 0.45) continue;
+            const off = (rd.w || 12) / 2 + 1.1; const x = a[0] + tx * s - tz * off * side, z = a[1] + tz * s + tx * off * side;
+            if (!inPlay(x, z, 0) || col.isBlocked(x, z) || spots.some(o => (o[0] - x) ** 2 + (o[1] - z) ** 2 < 36)) continue;
+            spots.push([x, z, Math.atan2(tx, tz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), r()]);
+          }
+        }
+      }
+      const kinds = [[binG, new THREE.MeshStandardMaterial({ color: 0x4d5459, roughness: 0.55, metalness: 0.4 }), 0.5], [benchG, new THREE.MeshStandardMaterial({ color: 0x3b3f43, roughness: 0.6, metalness: 0.5 }), 0.8], [boxG, new THREE.MeshStandardMaterial({ color: 0x1e5b3a, roughness: 0.5, metalness: 0.3 }), 1.01]];
+      let lo = 0;
+      for (const [g, m, hi] of kinds) {
+        const sel = spots.filter(sp => sp[3] >= lo && sp[3] < hi); lo = hi; if (!sel.length) continue;
+        const ims = new THREE.InstancedMesh(g, m, sel.length);
+        sel.forEach(([x, z, a], i) => { m4.compose(v.set(x, 0, z), q.setFromEuler(e.set(0, a, 0)), one); ims.setMatrixAt(i, m4); col.addPoly([[x - 0.35, z - 0.35], [x + 0.35, z - 0.35], [x + 0.35, z + 0.35], [x - 0.35, z + 0.35]], false); });
+        ims.instanceMatrix.needsUpdate = true; ims.castShadow = true; ims.receiveShadow = true; scene.add(ims);
+      }
+    }
     const signPoleMat = new THREE.MeshStandardMaterial({ color: 0x8f969b, metalness: 0.7, roughness: 0.4 });
     const stops = D.O.filter(([x, z]) => inPlay(x, z, 30));
     const sp = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.035, 0.035, 2.6, 6).translate(0, 1.3, 0), signPoleMat, Math.max(1, stops.length + D.Q.length));
