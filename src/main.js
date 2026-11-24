@@ -509,7 +509,7 @@ function updateZombies(dt) {
     else {
       const dx = player.x - z.x, dz = player.z - z.z, d = Math.hypot(dx, dz);
       z.losT -= dt; if (z.losT <= 0) { z.losT = 0.4 + Math.random() * 0.3; z.los = d < 60 && col.ray(z.x, z.z, dx, dz, d) >= d - 0.5; }
-      let mx = 0, mz = 0;
+      let mx, mz;
       if (z.los || d < 3) { mx = dx / d; mz = dz / d; } else if (flowDir(z.x, z.z, tmp)) { mx = tmp.x; mz = tmp.z; } else { mx = dx / d; mz = dz / d; }
       const reach = 1.05 * z.sc + 0.35;
       let sp = z.sp * (z.stag > 0 ? 0.25 : 1); z.stag -= dt; z.flash -= dt;

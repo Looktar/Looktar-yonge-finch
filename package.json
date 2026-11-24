@@ -1,19 +1,33 @@
 {
   "name": "yonge-finch-dusk",
-  "version": "1.0.0",
-  "description": "央街·芬治 黄昏：浏览器 3D 第一人称打僵尸，1:1 还原多伦多 Yonge × Finch",
+  "version": "0.4.0",
+  "description": "央街·芬治 黄昏：浏览器 3D 第一人称打僵尸，1:1 还原多伦多 Yonge × Finch。游戏打包成单个 HTML，开发工具只在开发时用。",
   "scripts": {
     "build": "python3 build.py",
-    "serve": "cd dist && python3 -m http.server 8765"
+    "check": "python3 build.py --check",
+    "serve": "cd dist && python3 -m http.server 8765",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "smoke": "node tests/e2e/smoke.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "UNLICENSED",
   "dependencies": {
-    "esbuild": "^0.28.2",
     "n8ao": "^2.1.0",
     "three": "^0.170.0"
   },
   "type": "module",
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "playwright": "1.63.0",
+    "vitest": "^5.1.1",
+    "esbuild": "^0.28.2"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
 }

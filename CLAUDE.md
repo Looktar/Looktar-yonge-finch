@@ -7,16 +7,27 @@
 
 ## 技术栈
 - three.js r170（WebGLRenderer + EffectComposer），esbuild 打包成**单个 HTML**。
-- 发布到 claude.ai artifact：新版 https://claude.ai/artifact/4PRSuvUCvZC57hKZHgX5jd （2026-11-24 起，街景对照版）；旧版 slug `57bd93be-f9e8-4974-b546-461bba6874a5` 保留未动。均仅本人可见。发布文件：`dist/index.html`、`dist/Soldier.json`、`dist/Michelle.json`、`dist/tex/*.jpg`（PBR 贴图，按相对路径 `tex/` 加载）。
+- 发布到 claude.ai artifact：新版 https://claude.ai/artifact/4PRSuvUCvZC57hKZHgX5jd （2026-11-24 起，街景对照版）；旧版 slug `57bd93be-f9e8-4974-b546-461bba6874a5` 保留未动。均仅本人可见。发布文件：`dist/index.html`、`dist/Soldier.json`、`dist/Michelle.json`、`dist/chars/*`（角色贴图）、`dist/tex/*.jpg`（PBR 贴图，按相对路径 `tex/` 加载）。
 - 依赖：three r170、n8ao（环境光遮蔽，CC0）。n8ao 会引用 `postprocessing`，构建时用 `--alias` 指到 `src/pp_stub.js`，不打包进来。
 
 ## 常用命令
 ```
 npm ci            # 只第一次
-npm run build     # = python3 build.py：src/main.js → dist/game.js → 内联进 src/index.html 的 /*GAME*/ → dist/index.html
+npm run build     # = python3 build.py：src/main.js → dist/game.js → 内联进 src/index.html 的 /*GAME*/ → dist/index.html（版本号取 package.json）
+npm run check     # 确认提交的 dist/index.html 和 src/ 一致（CI 会查）
+npm run lint && npm test   # ESLint + Vitest 单元测试（tests/unit/，约 1 秒）
+npm run smoke     # Playwright 冒烟：桌面 + iPhone 横屏，出画面、无报错、非全黑全白，截图到 test-results/smoke/（约 2 分钟）
 npm run serve     # http://localhost:8765/ （必须走 http，file:// 下角色 json 被 CORS 拦）
 ```
-- 无头截图：Playwright 预装的 Chromium，`--use-angle=swiftshader`，软件渲染约 2 FPS 属正常。
+- 无头截图：Playwright 预装的 Chromium，`--use-angle=swiftshader`，软件渲染约 2 FPS 属正常。云端环境里**不要**运行 `playwright install`（CI 里要）。
+
+## 工作规则（照 project905）
+- 进度看 `docs/PROGRESS.md`，决定记 `docs/DECISIONS.md`（D-xx 只增不改），以后的想法写 `docs/BACKLOG.md`，外来素材登记 `CREDITS.md`。
+- 每个改动开新分支，提 PR 合并进 `main`；PR 模板在 `.github/PULL_REQUEST_TEMPLATE.md`。
+- 合并前：`npm run build && npm run check && npm run lint && npm test && npm run smoke` 全绿，冒烟截图亲自看一遍。
+- 发版时改 `package.json` 的 `version`（菜单底部显示），再 `npm run build`。
+- `main` 推送后 GitHub Actions 自动发布 `dist/` 到 GitHub Pages：https://looktar.github.io/looktar-yonge-finch/ （仓库 Settings → Pages → Source 要选 GitHub Actions）。claude.ai artifact 照旧手动发布。
+- 已知但还没修的 bug 先写成 `it.fails` 测试。
 
 ## 目录
 ```
@@ -37,6 +48,9 @@ dist/tex/          PBR 贴图（1k 地面、512 墙面，约 3 MB）
 docs/RESEARCH-visuals.md  画面对标研究和改动清单
 assets/            原始 Soldier.glb / Michelle.glb
 test/              模型测试页
+tests/unit/        Vitest：车模几何（法线、尺寸、轮胎贴地）、手感（后坐力回正、低帧率稳定）
+tests/e2e/smoke.mjs  Playwright 冒烟测试
+.github/           CI、Pages 发布、Issue / PR 模板
 ```
 
 ## 画面要点（2026-11-24 对标改版）
