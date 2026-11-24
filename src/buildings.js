@@ -248,7 +248,7 @@ export function facadeMaterial() {
           } else if (st == 5 || st == 6) { // ribbon windows between solid bands (offices; NAC granite)
             float rib = pulse(g.y, st == 6 ? 0.46 : 0.42, st == 6 ? 0.97 : 0.95, dg.y);
             win = rib * mull; alb = base * (0.95 + 0.08 * noise);
-            if (st == 6) { win = rib * mix(1.0, mull, 0.0); alb = mix(alb, tint * 0.5, rib * (1.0 - mull)); } // NAC: continuous bronze glass bands, slim bronze mullions
+            if (st == 6) { win = rib * pulse(g.x, 0.02, 0.98, dg.x); alb = mix(alb, vec3(0.09, 0.08, 0.07), rib); } // NAC: continuous bronze glass bands, slim dark-bronze mullions
             if (st == 6) { float gr = h21(floor(F * vec2(1.6, 4.0)) + seed); alb = base * mix(0.9 + 0.2 * gr, 1.0, smoothstep(0.02, 0.08, dF.y)); }
             litF = st == 6 ? 0.16 : 0.3; lc = vec3(0.95, 0.93, 0.85);
           } else if (st == 9) { // transit pavilion: glass walls under a fascia

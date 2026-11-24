@@ -66,9 +66,9 @@ const col = W.col;
   const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(es, 0.015, 0.1, 400).texture; scene.environmentIntensity = 1;
 }
 
-const hemi = new THREE.HemisphereLight(0x8fa3cf, 0x4a3d34, 3.4); scene.add(hemi);
+const hemi = new THREE.HemisphereLight(0x8fa3cf, 0x4a3d34, 2.8); scene.add(hemi);
 // low sun in the WSW, as at a late-November sunset over Yonge & Finch
-const sun = new THREE.DirectionalLight(0xffb27a, 4.2); scene.add(sun); scene.add(sun.target);
+const sun = new THREE.DirectionalLight(0xffa66a, 5.4); scene.add(sun); scene.add(sun.target);
 sun.castShadow = Q.shadow > 0; sun.shadow.mapSize.set(Q.shadow || 1024, Q.shadow || 1024);
 { const c = sun.shadow.camera; c.left = -130; c.right = 130; c.top = 70; c.bottom = -70; c.near = 1; c.far = 1200; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.06; }
 function placeSun(x, z) { // follow the player, snapped to shadow texels to avoid shimmering

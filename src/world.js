@@ -203,7 +203,7 @@ function buildRoads(roads, tex) {
   const grp = new THREE.Group();
   if (curb.pos.length) {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(curb.pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(curb.uv, 2)); g.setAttribute('normal', new THREE.Float32BufferAttribute(curb.nrm, 3)); g.computeBoundingSphere();
-    const cm = new THREE.MeshStandardMaterial({ color: 0x9e9b95, roughness: 0.92, side: THREE.DoubleSide });
+    const cm = new THREE.MeshStandardMaterial({ color: 0x86837e, roughness: 0.92, side: THREE.DoubleSide });
     const me = new THREE.Mesh(g, cm); me.matrixAutoUpdate = false; me.receiveShadow = true; grp.add(me);
     const gm = new THREE.MeshStandardMaterial({ color: 0x8e8c88, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -5 });
     const gg = geomFrom(gutter); const gme = new THREE.Mesh(gg, gm); gme.matrixAutoUpdate = false; gme.receiveShadow = true; grp.add(gme);
@@ -408,6 +408,37 @@ export function buildWorld(scene, tex, quality) {
   }
   const signalMat = new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff2010, emissiveIntensity: 5 });
   if (sigPole.length) { scene.add(new THREE.Mesh(mergeGeometries(sigPole), poleMat)); scene.add(new THREE.Mesh(mergeGeometries(sigHead), new THREE.MeshStandardMaterial({ color: 0xe8b400, roughness: 0.45 }))); /* Toronto's yellow signal heads */ scene.add(new THREE.Mesh(mergeGeometries(sigLamp), signalMat)); }
+
+  // ---- landmarks seen in Street View at the corner: the lit billboard over the south-east corner shops, and the
+  // keep-right sign + yellow/black hazard marker on the noses of the Yonge medians ----
+  {
+    const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 360; const g = cv.getContext('2d');
+    const gr = g.createLinearGradient(0, 0, 1024, 0); gr.addColorStop(0, '#0f2a4a'); gr.addColorStop(1, '#1b5d8c'); g.fillStyle = gr; g.fillRect(0, 0, 1024, 360);
+    g.fillStyle = '#f6d36b'; g.fillRect(0, 290, 1024, 70); g.fillStyle = '#ffffff'; g.font = 'bold 92px "Helvetica Neue", Arial, sans-serif'; g.fillText('NORTH YORK', 40, 120);
+    g.font = '58px "Helvetica Neue", Arial, sans-serif'; g.fillText('Condos at Yonge & Finch', 44, 210); g.fillStyle = '#12324f'; g.font = 'bold 44px Arial, sans-serif'; g.fillText('FROM THE LOW $400s  ·  핀치 분양', 40, 342);
+    const bt = new THREE.CanvasTexture(cv); bt.colorSpace = THREE.SRGBColorSpace; bt.anisotropy = 4;
+    const bx = 34, bz = 104, face = Math.atan2(XING[0] - bx, XING[1] - bz);
+    const frame = mergeGeometries([new THREE.BoxGeometry(0.3, 13, 0.3).translate(-3, 6.5, -0.4), new THREE.BoxGeometry(0.3, 13, 0.3).translate(3, 6.5, -0.4), new THREE.BoxGeometry(10.6, 4.0, 0.25).translate(0, 11.2, -0.25), new THREE.BoxGeometry(10.6, 0.12, 0.9).translate(0, 9.1, 0.3)].map(q => q.toNonIndexed()));
+    frame.rotateY(face).translate(bx, 0, bz); scene.add(new THREE.Mesh(frame, poleMat));
+    const board = new THREE.PlaneGeometry(10, 3.5).translate(0, 11.2, -0.1).rotateY(face).translate(bx, 0, bz);
+    scene.add(new THREE.Mesh(board, new THREE.MeshStandardMaterial({ map: bt, emissiveMap: bt, emissive: 0xffffff, emissiveIntensity: 0.7, roughness: 0.6 })));
+    col.addPoly([[bx - 0.5, bz - 0.5], [bx + 0.5, bz - 0.5], [bx + 0.5, bz + 0.5], [bx - 0.5, bz + 0.5]], false);
+    const kc = document.createElement('canvas'); kc.width = 128; kc.height = 256; const k = kc.getContext('2d');
+    k.fillStyle = '#f3f3ef'; k.fillRect(0, 0, 128, 150); k.strokeStyle = '#111'; k.lineWidth = 5; k.strokeRect(6, 6, 116, 138);
+    k.fillStyle = '#111'; k.beginPath(); k.moveTo(48, 120); k.bezierCurveTo(48, 80, 82, 82, 82, 48); k.lineTo(70, 48); k.lineTo(90, 22); k.lineTo(108, 48); k.lineTo(96, 48); k.bezierCurveTo(96, 92, 62, 92, 62, 120); k.closePath(); k.fill();
+    k.fillRect(20, 60, 22, 60); // the median island symbol
+    for (let i = 0; i < 6; i++) { k.fillStyle = i % 2 ? '#111' : '#f2c400'; k.beginPath(); k.moveTo(0, 156 + i * 18); k.lineTo(128, 156 + i * 18 - 40); k.lineTo(128, 174 + i * 18 - 40); k.lineTo(0, 174 + i * 18); k.fill(); }
+    k.clearRect(0, 150, 128, 6);
+    const kt = new THREE.CanvasTexture(kc); kt.colorSpace = THREE.SRGBColorSpace;
+    const kparts = [], kpost = [];
+    for (const [x, z, a] of [[-3.4, 85, Math.PI], [3.2, 101, 0]]) {
+      kpost.push(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 6).translate(x, 1.2, z).toNonIndexed());
+      const pg = new THREE.PlaneGeometry(0.62, 1.24).translate(0, 1.55, 0.06).rotateY(a).translate(x, 0, z); kparts.push(pg.toNonIndexed());
+      col.addPoly([[x - 0.15, z - 0.15], [x + 0.15, z - 0.15], [x + 0.15, z + 0.15], [x - 0.15, z + 0.15]], false);
+    }
+    scene.add(new THREE.Mesh(mergeGeometries(kpost), poleMat));
+    scene.add(new THREE.Mesh(mergeGeometries(kparts), new THREE.MeshStandardMaterial({ map: kt, roughness: 0.4, emissive: 0xffffff, emissiveMap: kt, emissiveIntensity: 0.08, side: THREE.DoubleSide })));
+  }
 
   // ---- cars ----
   const cars = []; const carColors = ['#5a1414', '#1d2a3a', '#2b2b2b', '#6b6b6b', '#d0d0d0', '#16301f', '#3c2b1a', '#7a5a10', '#101010', '#8a8f96'];

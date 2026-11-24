@@ -65,9 +65,9 @@ export function makeSky() {
         // broken stratocumulus deck (late-November Toronto): dark violet undersides, edges and thin parts lit
         // orange by the sun just under the deck; plus high cirrus streaks catching the last light
         vec2 cp = d.xz / (y + 0.07);
-        float wq = fbm(cp * 0.55 + vec2(1.7, 9.2));
-        float n = fbm(cp * 0.9 + wq * 1.6 + vec2(5.0, 2.0));
-        float cov = 0.5 - 0.06 * az;
+        float wq = fbm(cp * 1.3 + vec2(1.7, 9.2));
+        float n = fbm(cp * 2.2 + wq * 1.8 + vec2(5.0, 2.0));
+        float cov = 0.43 - 0.05 * az;
         float dens = smoothstep(cov, cov + 0.2, n) * smoothstep(0.015, 0.11, y) * (1.0 - 0.35 * smoothstep(0.5, 0.95, y));
         float thin = 1.0 - smoothstep(cov + 0.03, cov + 0.26, n);
         vec3 under = mix(vec3(0.17, 0.15, 0.22), vec3(0.42, 0.27, 0.3), pow(az, 1.4)) * (0.85 + 0.3 * fbm(cp * 2.7));
