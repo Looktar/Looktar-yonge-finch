@@ -7,7 +7,8 @@
 
 ## 技术栈
 - three.js r170（WebGLRenderer + EffectComposer），esbuild 打包成**单个 HTML**。
-- 发布到 claude.ai artifact，slug `57bd93be-f9e8-4974-b546-461bba6874a5`（仅本人可见）。发布文件：`dist/index.html`、`dist/Soldier.json`、`dist/Michelle.json`。
+- 发布到 claude.ai artifact，slug `57bd93be-f9e8-4974-b546-461bba6874a5`（仅本人可见）。发布文件：`dist/index.html`、`dist/Soldier.json`、`dist/Michelle.json`、`dist/tex/*.jpg`（PBR 贴图，按相对路径 `tex/` 加载）。
+- 依赖：three r170、n8ao（环境光遮蔽，CC0）。n8ao 会引用 `postprocessing`，构建时用 `--alias` 指到 `src/pp_stub.js`，不打包进来。
 
 ## 常用命令
 ```
@@ -29,11 +30,21 @@ src/zombie.js      Mixamo 骨骼角色加载/重定向/僵尸化/程序化姿态
 src/weapons.js     步枪/霰弹/手枪视图模型
 src/touch.js       手机触控
 src/index.html     菜单/HUD/触控层/CSS
+src/pbr.js         Poly Haven CC0 实景扫描贴图：地面（草/混凝土按铺装遮罩混合）、路面材质、墙面贴图数组
 src/data_*.js      OSM 建筑(b)、道路(r)、区域+节点(a)、街景线/massing/缺失建筑(x)、行道树(t)
 dist/              构建产物 + 角色 json（.glb 转内嵌 glTF，artifact 服务器不收 .glb）；game.js 不提交
+dist/tex/          PBR 贴图（1k 地面、512 墙面，约 3 MB）
+docs/RESEARCH-visuals.md  画面对标研究和改动清单
 assets/            原始 Soldier.glb / Michelle.glb
 test/              模型测试页
 ```
+
+## 画面要点（2026-11-24 对标改版）
+- 中/高画质：N8AO 环境光遮蔽 + SMAA；低画质（手机默认）都关。`QUAL` 里的 `ao`、`aa`。
+- 立面 shader（buildings.js）：墙面贴图数组按风格选层（砖/灰泥/预制混凝土/花岗岩），除以平均色只加细节；窗户用室内映射（每格一个房间，有视差），玻璃是电介质，镀膜玻璃（GLASS/RIB/NAC）带金属度。
+- 地面：`pavedMask()` 画出铺装区域（非独立屋的建筑周边、主干道两侧），其余是草；OSM 草地/公园强制为草。
+- 路缘石：每条路两侧 15 cm，跨过别的车道处断开（world.js 的 `cover` 栅格）。
+- 截图脚本要用手动渲染 + `toDataURL`（软件渲染下 `page.screenshot` 会超时），见 docs/RESEARCH-visuals.md 末尾。
 
 ## 关键约定
 - 坐标：x = 东，z = 南；原点 lat0 = 43.78060、lon0 = -79.41550；路口 XING = (-3, 92)；出生点 START = (-6, 128)。

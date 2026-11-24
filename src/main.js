@@ -4,6 +4,8 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
+import { N8AOPass } from 'n8ao';
 import { buildWorld, makeTextures, EXT, CELL, GN, PLAY_C, PLAY_R, START, rng } from './world.js';
 import { Particles, makeSky, Sfx, SUN } from './fx.js';
 import { loadZombieAssets, ZombieActor, zombiePose } from './zombie.js';
@@ -11,7 +13,7 @@ import { isTouch, initTouch } from './touch.js';
 import { buildRifle, buildShotgun, buildPistol, flashTextures, makeFlash, casingGeo, mats } from './weapons.js';
 
 const $ = id => document.getElementById(id);
-const QUAL = { high: { pr: 1.5, bloom: true, shadow: 4096, aa: true, lights: 6 }, mid: { pr: 1, bloom: true, shadow: 2048, aa: false, lights: 4 }, low: { pr: 0.75, bloom: false, shadow: 0, aa: false, lights: 2 } };
+const QUAL = { high: { pr: 1.5, bloom: true, shadow: 4096, aa: true, ao: 'full', lights: 6 }, mid: { pr: 1, bloom: true, shadow: 2048, aa: true, ao: 'half', lights: 4 }, low: { pr: 0.75, bloom: false, shadow: 0, aa: false, ao: false, lights: 2 } };
 const TOUCH = isTouch(); if (TOUCH) { document.body.classList.add('touch'); QUAL.low.pr = 1; QUAL.mid.pr = 1; }
 let Q = TOUCH ? QUAL.low : QUAL.mid; if (TOUCH) $('q-low').checked = true;
 try { const s = localStorage.getItem('yf_q'); if (s && QUAL[s]) { Q = QUAL[s]; $('q-' + s).checked = true; } } catch (e) { }
@@ -58,9 +60,9 @@ const col = W.col;
 // environment = the dusk sky itself (glass towers mirror the sunset), dark ground below the horizon
 {
   const es = new THREE.Scene(); const s2 = makeSky(); s2.scale.setScalar(0.2); es.add(s2);
-  const gnd = new THREE.Mesh(new THREE.CircleGeometry(80, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x1b1816 })); gnd.position.y = -3; es.add(gnd);
+  const gnd = new THREE.Mesh(new THREE.CircleGeometry(80, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x4a4542 })); gnd.position.y = -3; es.add(gnd);
   const r = rng(5); const bg = new THREE.BoxGeometry(1, 1, 1);
-  for (let i = 0; i < 26; i++) { const a = r() * Math.PI * 2, d = 45 + r() * 25, h = 6 + r() * 26; const m = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.05 + r() * 0.04, 0.05 + r() * 0.04, 0.06 + r() * 0.05) })); m.position.set(Math.cos(a) * d, h / 2 - 3, Math.sin(a) * d); m.scale.set(8 + r() * 10, h, 8 + r() * 10); m.lookAt(0, m.position.y, 0); es.add(m); }
+  for (let i = 0; i < 26; i++) { const a = r() * Math.PI * 2, d = 45 + r() * 25, h = 6 + r() * 26; const m = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.16 + r() * 0.12, 0.15 + r() * 0.1, 0.15 + r() * 0.1) })); m.position.set(Math.cos(a) * d, h / 2 - 3, Math.sin(a) * d); m.scale.set(8 + r() * 10, h, 8 + r() * 10); m.lookAt(0, m.position.y, 0); es.add(m); }
   const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(es, 0.015, 0.1, 400).texture; scene.environmentIntensity = 1;
 }
 
@@ -99,11 +101,17 @@ const vmMuzzle = new THREE.PointLight(0xffb060, 0, 2.5, 2); vmScene.add(vmMuzzle
 
 // ---------- post ----------
 const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
+// scene pass with screen-space ambient occlusion (N8AO): contact shadows where walls meet the ground, in corners,
+// under balconies, awnings and cars; tinted cool like the dusk skylight it occludes
+const basePass = new RenderPass(scene, camera); composer.addPass(basePass);
+const aoPass = new N8AOPass(scene, camera, innerWidth, innerHeight);
+Object.assign(aoPass.configuration, { aoRadius: 2.2, distanceFalloff: 1.0, intensity: 2.6, color: new THREE.Color(0x0b0d16), gammaCorrection: false, halfRes: true, screenSpaceRadius: false });
+aoPass.setQualityMode('Medium'); composer.addPass(aoPass);
 let vmPass = null; // added once vmScene exists
 vmPass = new RenderPass(vmScene, vmCam); vmPass.clear = false; vmPass.clearDepth = true; composer.addPass(vmPass);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.42, 0.5, 0.95); composer.addPass(bloom);
 composer.addPass(new OutputPass());
+const smaa = new SMAAPass(innerWidth, innerHeight); composer.addPass(smaa);
 const grade = new ShaderPass({
   uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uDmg: { value: 0 }, uLow: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
@@ -120,6 +128,7 @@ composer.addPass(grade);
 function applyQuality() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); composer.setSize(innerWidth, innerHeight);
   bloom.enabled = Q.bloom; lampLights.forEach((l, i) => l.visible = i < Q.lights);
+  aoPass.enabled = !!Q.ao; basePass.enabled = !Q.ao; aoPass.configuration.halfRes = Q.ao !== 'full'; smaa.enabled = Q.aa;
   if (typeof sun !== 'undefined') { const on = Q.shadow > 0; if (sun.castShadow !== on || (on && sun.shadow.mapSize.x !== Q.shadow)) { sun.castShadow = on; if (on) { sun.shadow.mapSize.set(Q.shadow, Q.shadow); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } } scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); } }
 }
 applyQuality();
@@ -529,4 +538,4 @@ computeFlow(START[0], START[1]);
 // a few shamblers for the title screen
 
 requestAnimationFrame(frame);
-window.__yf = { S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer };
+window.__yf = { S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun };

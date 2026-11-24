@@ -11,6 +11,7 @@
   "license": "UNLICENSED",
   "dependencies": {
     "esbuild": "^0.28.2",
+    "n8ao": "^2.1.0",
     "three": "^0.170.0"
   },
   "type": "module",

@@ -69,7 +69,7 @@ export function addStreetscape(scene, ctx) {
     const parts = [];
     for (const s of D.X) { const p = s.p; for (let i = 0; i < p.length - 1; i++) { const a = p[i], b = p[i + 1]; const dx = b[0] - a[0], dz = b[1] - a[1]; const L = Math.hypot(dx, dz); if (L < 1) continue; const ang = Math.atan2(dx, dz);
       for (let t = 0.6; t < L - 0.3; t += 1.1) { const g = new THREE.PlaneGeometry(3.2, 0.55).rotateX(-Math.PI / 2).rotateY(ang); g.translate(a[0] + dx / L * t, 0.05, a[1] + dz / L * t); parts.push(g); } } }
-    if (parts.length) { const m = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ color: 0xd6d6cf, roughness: 0.4, emissive: 0x151515, polygonOffset: true, polygonOffsetFactor: -6 })); m.renderOrder = 4; scene.add(m); }
+    if (parts.length) { const m = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ color: 0xb4b4ad, roughness: 0.62, polygonOffset: true, polygonOffsetFactor: -6 })); m.renderOrder = 4; scene.add(m); }
   }
   // ---- fences & walls ----
   {

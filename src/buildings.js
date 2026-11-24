@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { B } from './data_b.js';
 import { HM, BX } from './data_x.js';
 import { nearestRoad } from './street.js';
+import { wallArrays, TILE, WALL_LAYERS } from './pbr.js';
 
 const dec = s => { const v = s.split(',').map(Number); const p = []; let x = 0, z = 0; for (let i = 0; i < v.length; i += 2) { x += v[i]; z += v[i + 1]; p.push([x / 2, z / 2]); } return p; };
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -80,11 +81,11 @@ function assignStyle(b, r) {
   b.fh = 3.0; b.acc = C(PALS.glass.clear); b.balc = null; b.roofKind = 'flat';
   const nac = cx > -118 && cx < -22 && cz > -98 && cz < 88;
   if (nac && b.H > 40) { // North American Centre: rose granite bands + bronze reflective glass, sloped glass crowns
-    b.st = ST.NAC; b.wall = C('#c7a595'); b.acc = C('#8a6450'); b.fh = 3.9; b.res = false;
+    b.st = ST.NAC; b.wall = C('#dcbfb0'); b.acc = C('#9a7052'); b.fh = 3.9; b.res = false;
     if (b.part && Math.abs(b.h - 84) < 1) b.crown = { h: 14, dir: cz < 0 ? 35 : 125 };
     return;
   }
-  if (nac && (b.t === 'co' || b.part)) { b.st = ST.NAC; b.wall = C('#c4a292'); b.acc = C('#8a6450'); b.fh = 4.4; if (b.part && b.H < 10) b.crown = { h: 3.5, dir: 35 }; return; }
+  if (nac && (b.t === 'co' || b.part)) { b.st = ST.NAC; b.wall = C('#d8bbad'); b.acc = C('#9a7052'); b.fh = 4.4; if (b.part && b.H < 10) b.crown = { h: 3.5, dir: 35 }; return; }
   const near = (x, z, d) => Math.hypot(cx - x, cz - z) < d;
   if (b.t === 'tr' || (b.t === 'ye' && (near(-21, -159, 12) || near(20, -157, 12)))) {
     b.st = ST.TRN; b.fh = 4; b.wall = C(near(-21, -159, 12) || near(20, -157, 12) ? '#d6d6d0' : '#9c998f'); b.acc = C('#34434b'); return;
@@ -183,13 +184,19 @@ function signAtlas() {
 // ---------- facade shader ----------
 export function facadeMaterial() {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.0, envMapIntensity: 1.0 });
+  const WA = wallArrays();
+  const U = { uWinI: { value: 1.0 }, uWC: { value: WA.col }, uWN: { value: WA.nor }, uWM: { value: WA.mean } };
+  WA.ready.then(a => { U.uWC.value = a.col; U.uWN.value = a.nor; });
+  const L = n => WALL_LAYERS.indexOf(n), T = n => TILE[n].toFixed(2);
   m.onBeforeCompile = sh => {
-    sh.uniforms.uWinI = { value: 1.0 };
+    Object.assign(sh.uniforms, U);
     m.userData.shader = sh;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aFac; attribute vec4 aInfo; attribute vec3 aAcc; varying vec2 vFac; varying vec4 vInfo; varying vec3 vAcc;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFac = aFac; vInfo = aInfo; vAcc = aAcc;');
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aFac; attribute vec4 aInfo; attribute vec3 aAcc; varying vec2 vFac; varying vec4 vInfo; varying vec3 vAcc; varying vec3 vWP; varying vec3 vWN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFac = aFac; vInfo = aInfo; vAcc = aAcc; vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-      varying vec2 vFac; varying vec4 vInfo; varying vec3 vAcc; uniform float uWinI;
+      varying vec2 vFac; varying vec4 vInfo; varying vec3 vAcc; varying vec3 vWP; varying vec3 vWN; uniform float uWinI;
+      uniform highp sampler2DArray uWC; uniform highp sampler2DArray uWN; uniform vec3 uWM[${WALL_LAYERS.length}];
+      float gWall; vec3 gWNts;
       float h21(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
       float pI(float x, float lo, float hi){ return floor(x)*(hi-lo) + clamp(fract(x), lo, hi) - lo; }
       // box-filtered pulse train: 1 inside [lo,hi] of every unit cell, exactly antialiased at any distance
@@ -241,6 +248,7 @@ export function facadeMaterial() {
           } else if (st == 5 || st == 6) { // ribbon windows between solid bands (offices; NAC granite)
             float rib = pulse(g.y, st == 6 ? 0.46 : 0.42, st == 6 ? 0.97 : 0.95, dg.y);
             win = rib * mull; alb = base * (0.95 + 0.08 * noise);
+            if (st == 6) { win = rib * mix(1.0, mull, 0.0); alb = mix(alb, tint * 0.5, rib * (1.0 - mull)); } // NAC: continuous bronze glass bands, slim bronze mullions
             if (st == 6) { float gr = h21(floor(F * vec2(1.6, 4.0)) + seed); alb = base * mix(0.9 + 0.2 * gr, 1.0, smoothstep(0.02, 0.08, dF.y)); }
             litF = st == 6 ? 0.16 : 0.3; lc = vec3(0.95, 0.93, 0.85);
           } else if (st == 9) { // transit pavilion: glass walls under a fascia
@@ -286,6 +294,19 @@ export function facadeMaterial() {
           g = F / vec2(1.6, 1.9); dg = dF / vec2(1.6, 1.9); cell = floor(g);
           win = pulse(g.x, 0.05, 0.95, dg.x) * pulse(g.y, 0.06, 0.94, dg.y); alb = base * 0.6; litF = 0.0;
         } else if (st == 18) { alb = base * 0.92; rgh = 0.7; }
+        // photo-scanned wall material at real scale (detail only: divided by its mean so the building keeps its colour)
+        int layer = (st == 0 || st == 8 || st == 10) ? ${L('brick')} : (st == 1 || st == 7) ? ${L('stucco')} : st == 6 ? ${L('granite')} : (st == 3 || st == 5 || st == 11 || st == 12 || st == 18) ? ${L('precast')} : -1;
+        gWall = 0.0; gWNts = vec3(0.0, 0.0, 1.0);
+        if (layer >= 0 && abs(vWN.y) < 0.5) {
+          float tl = layer == ${L('brick')} ? ${T('brick')} : layer == ${L('stucco')} ? ${T('stucco')} : layer == ${L('granite')} ? ${T('granite')} : ${T('precast')};
+          vec3 uvw = vec3(F.x / tl, -F.y / tl, float(layer));
+          vec3 tc = texture(uWC, uvw).rgb / uWM[layer];
+          float k = layer == ${L('brick')} ? 1.0 : 0.85;
+          vec3 wc = (layer == ${L('brick')} ? base : alb) * mix(vec3(1.0), tc, k);
+          if (st <= 2) wc = mix(wc, vec3(0.36, 0.35, 0.33), 1.0 - step(0.5, F.y));
+          alb = mix(wc, alb, step(0.5, win) );
+          gWall = 1.0 - step(0.5, win); gWNts = texture(uWN, uvw).xyz * 2.0 - 1.0;
+        }
         // ground-floor shops: storefront glazing, mullions, kick plate, backlit interiors
         float sfH = st == 7 ? 3.5 : 4.3;
         if (front > 0.5 && F.y < sfH && st != 9) {
@@ -295,24 +316,63 @@ export function facadeMaterial() {
           win = m2 * vy * tr; alb = vec3(0.07, 0.075, 0.08); cell = vec2(floor(F.x / 7.5), 77.0);
           tint = vec3(0.06, 0.07, 0.08); litF = 0.86; lc = mix(vec3(1.0, 0.82, 0.62), vec3(0.85, 0.93, 1.0), step(0.55, h21(cell + seed * 3.1)));
         } else if (st == 7 && F.y < sfH + 1.05 && front > 0.5) { alb = vec3(0.06, 0.065, 0.07); rgh = 0.5; }
-        // glass response: tinted reflective panes, a share of them lit from inside
+        // glass: a dielectric pane (fresnel reflection of the dusk sky) over an interior-mapped room
+        bool shop = front > 0.5 && F.y < sfH && st != 9;
         float hs = h21(cell + seed * 1.37); float hs2 = h21(cell.yx * 1.91 + seed * 0.37);
         float lit = step(1.0 - litF, hs);
-        float detail = smoothstep(0.35, 1.0, max(dg.x, dg.y));
-        lit = mix(lit, litF, detail);
-        hs2 = mix(hs2, 0.5, detail); vec3 glassC = tint * (0.85 + 0.3 * hs2);
-        alb = mix(alb, mix(glassC, glassC * 0.35 + lc * 0.08, lit * 0.6), win);
-        rgh = mix(rgh, mix(0.05 + 0.1 * hs2, 0.35, lit), win);
-        mtl = mix(mtl, mix(0.72, 0.15, lit), win);
-        bool shop = front > 0.5 && F.y < sfH && st != 9;
-        em = win * lit * lc * (shop ? 0.3 : (st == 5 || st == 6 ? 0.04 + 0.08 * hs2 : 0.08 + 0.22 * hs2));
+        float detail = shop ? smoothstep(0.35, 1.0, max(dF.x, dF.y) / 2.0) : smoothstep(0.35, 1.0, max(dg.x, dg.y));
+        float tinted = (st == 4 || st == 6 || st == 5 || st == 16) ? 1.0 : 0.0;
+        vec3 room = vec3(0.0);
+        if (win > 0.001 && abs(vWN.y) < 0.5 && detail < 0.999) {
+          vec3 Nw = normalize(vWN); vec3 Tw = vec3(-Nw.z, 0.0, Nw.x);
+          vec3 V = normalize(vWP - cameraPosition);
+          vec3 d = vec3(dot(V, Tw), V.y, -dot(V, Nw)) + 1e-5;
+          vec2 cs = shop ? vec2(7.5, sfH) : vec2(bw, fh);
+          vec2 lp = shop ? vec2(fract(F.x / 7.5) * 7.5, F.y) : fract(g) * cs;
+          float D = shop ? 10.0 : max(3.4, bw * 1.15);
+          vec3 tt = (step(0.0, d) * vec3(cs, D) - vec3(lp, 0.0)) / d;
+          float t = min(min(tt.x, tt.y), tt.z);
+          vec3 hp = vec3(lp, 0.0) + d * t;
+          float rr = h21(cell + seed * 2.7), r2 = h21(cell * 1.3 + seed * 4.1);
+          vec3 wallc = mix(vec3(0.72, 0.66, 0.56), vec3(0.86, 0.86, 0.83), rr);
+          if (shop) wallc = mix(vec3(0.78, 0.74, 0.68), vec3(0.5, 0.52, 0.55), r2);
+          vec3 c;
+          if (t == tt.z) { // back wall with a piece of furniture / shelving
+            c = wallc * 0.92;
+            float fur = step(hp.y, (shop ? 2.0 : 0.85) + 0.5 * rr) * step(0.12 * cs.x, hp.x) * step(hp.x, (0.5 + 0.35 * r2) * cs.x);
+            c = mix(c, shop ? mix(vec3(0.75, 0.3, 0.2), vec3(0.2, 0.35, 0.6), r2) : vec3(0.28, 0.22, 0.18), fur);
+          }
+          else if (t == tt.x) c = wallc * 0.78;
+          else if (d.y < 0.0) c = shop ? mix(vec3(0.32, 0.3, 0.28), vec3(0.45, 0.36, 0.28), r2) : mix(vec3(0.34, 0.25, 0.18), vec3(0.5, 0.48, 0.45), rr); // floor
+          else { c = vec3(0.7); if (shop) { vec2 pq = abs(fract(hp.xz / vec2(2.4, 2.4)) - 0.5); c = mix(vec3(0.55), vec3(3.0), step(pq.x, 0.12) * step(pq.y, 0.3)); } } // ceiling (shops: light panels)
+          if (shop && t != tt.y) { // shelving / counters along the walls, and a row of display units mid-floor
+            float sh = step(hp.y, 1.9) * (1.0 - step(0.42, fract(hp.y / 0.45)) * 0.7);
+            float mid = step(abs(hp.z - D * 0.45), 0.5) * step(hp.y, 1.3);
+            c = mix(c, mix(vec3(0.85, 0.82, 0.76), mix(vec3(0.7, 0.2, 0.15), vec3(0.15, 0.4, 0.6), r2), 0.5) * (0.6 + 0.4 * fract(hp.x * 1.7 + r2 * 9.0)), max(sh * step(D * 0.6, hp.z), mid));
+          }
+          float depth = clamp(hp.z / D, 0.0, 1.0);
+          float lamp = lit * (1.0 - 0.6 * depth) * ((t == tt.y && d.y > 0.0) ? 1.5 : 1.0);
+          room = c * lc * (lamp + 0.012);
+          if (!shop) { // blinds and curtains part-way down some windows
+            float bl = step(0.5, r2) * step(1.0 - (0.15 + 0.7 * h21(cell + seed * 5.3)), lp.y / cs.y);
+            room = mix(room, mix(vec3(0.86, 0.84, 0.78), vec3(0.62, 0.55, 0.46), rr) * lc * (lit * 0.75 + 0.012), bl);
+          }
+        }
+        room = mix(room, lc * litF * 0.45, detail);
+        vec3 trans = mix(vec3(0.92), tint * 3.0 + 0.04, tinted * 0.85);
+        alb = mix(alb, tint * mix(0.12, 1.25, tinted * (st == 6 ? 1.0 : 0.6)), win); // reflective coatings: the metal colour tints the reflection
+        rgh = mix(rgh, 0.03 + 0.04 * hs2 * (1.0 - detail), win);
+        mtl = mix(mtl, tinted * (st == 6 ? 0.85 : 0.55), win);
+        em = win * room * trans * (shop ? 0.42 : st == 5 || st == 6 ? 0.16 : 0.38);
         gGlass = win; gMtl = mtl; gRgh = rgh; gEm = em; gCell = cell + seed; gDet = detail;
         diffuseColor.rgb = alb;
       }`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRgh;')
       .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = gMtl;')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-        if (gGlass > 0.5) { vec2 pn = vec2(h21(gCell * 1.7), h21(gCell * 2.3 + 5.1)) - 0.5; normal = normalize(normal + vec3(pn * 0.028 * (1.0 - gDet), 0.0)); }`)
+        if (gGlass > 0.5) { vec2 pn = vec2(h21(gCell * 1.7), h21(gCell * 2.3 + 5.1)) - 0.5; normal = normalize(normal + vec3(pn * 0.028 * (1.0 - gDet), 0.0)); }
+        else if (gWall > 0.5) { vec3 Nw = normalize(vWN); vec3 Tv = normalize((viewMatrix * vec4(-Nw.z, 0.0, Nw.x, 0.0)).xyz); vec3 Bv = (viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
+          normal = normalize(Tv * gWNts.x + Bv * gWNts.y + normal * max(gWNts.z, 0.2)); }`)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gEm * uWinI;');
   };
   return m;
@@ -394,7 +454,7 @@ export function buildCity(roads, col) {
 
     // balconies (instanced later)
     if (b.balc && H > 12) {
-      const fh = b.fh; const nF = Math.floor((H - 1.5) / fh);
+      const fh = b.fh; const nF = Math.floor((H - y0 - 1.5) / fh);
       const slabC = b.balc.slab || (b.balc.solid ? b.wall.clone().multiplyScalar(1.08) : C('#d2d0ca'));
       for (const e of edges) {
         if (!e || e.L < 6) continue;
@@ -488,7 +548,7 @@ export function buildCity(roads, col) {
     }
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); sg.setAttribute('normal', new THREE.Float32BufferAttribute(Nn, 3));
     const at = signAtlas();
-    const sm = new THREE.MeshStandardMaterial({ map: at, emissiveMap: at, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.45 });
+    const sm = new THREE.MeshStandardMaterial({ map: at, emissiveMap: at, emissive: 0xffffff, emissiveIntensity: 0.5, roughness: 0.45 });
     const smesh = new THREE.Mesh(sg, sm); smesh.matrixAutoUpdate = false; grp.add(smesh);
   }
   const verts = geo.attributes.position.count;
