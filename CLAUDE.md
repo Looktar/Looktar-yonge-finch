@@ -7,7 +7,7 @@
 
 ## 技术栈
 - three.js r170（WebGLRenderer + EffectComposer），esbuild 打包成**单个 HTML**。
-- 发布到 claude.ai artifact，slug `57bd93be-f9e8-4974-b546-461bba6874a5`（仅本人可见）。发布文件：`dist/index.html`、`dist/Soldier.json`、`dist/Michelle.json`、`dist/tex/*.jpg`（PBR 贴图，按相对路径 `tex/` 加载）。
+- 发布到 claude.ai artifact：新版 https://claude.ai/artifact/4PRSuvUCvZC57hKZHgX5jd （2026-11-24 起，街景对照版）；旧版 slug `57bd93be-f9e8-4974-b546-461bba6874a5` 保留未动。均仅本人可见。发布文件：`dist/index.html`、`dist/Soldier.json`、`dist/Michelle.json`、`dist/tex/*.jpg`（PBR 贴图，按相对路径 `tex/` 加载）。
 - 依赖：three r170、n8ao（环境光遮蔽，CC0）。n8ao 会引用 `postprocessing`，构建时用 `--alias` 指到 `src/pp_stub.js`，不打包进来。
 
 ## 常用命令
