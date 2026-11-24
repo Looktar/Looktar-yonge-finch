@@ -81,11 +81,11 @@ function assignStyle(b, r) {
   b.fh = 3.0; b.acc = C(PALS.glass.clear); b.balc = null; b.roofKind = 'flat';
   const nac = cx > -118 && cx < -22 && cz > -98 && cz < 88;
   if (nac && b.H > 40) { // North American Centre: rose granite bands + bronze reflective glass, sloped glass crowns
-    b.st = ST.NAC; b.wall = C('#dcbfb0'); b.acc = C('#9a7052'); b.fh = 3.9; b.res = false;
+    b.st = ST.NAC; b.wall = C('#cbbfb6'); b.acc = C('#7d6a58'); b.fh = 3.9; b.res = false; b.noSigns = true; // pale warm-grey granite (Street View), bronze-grey glass
     if (b.part && Math.abs(b.h - 84) < 1) b.crown = { h: 14, dir: cz < 0 ? 35 : 125 };
     return;
   }
-  if (nac && (b.t === 'co' || b.part)) { b.st = ST.NAC; b.wall = C('#d8bbad'); b.acc = C('#9a7052'); b.fh = 4.4; if (b.part && b.H < 10) b.crown = { h: 3.5, dir: 35 }; return; }
+  if (nac && (b.t === 'co' || b.part)) { b.st = ST.NAC; b.wall = C('#c8bcb3'); b.acc = C('#7d6a58'); b.fh = 4.4; b.noSigns = true; if (b.part && b.H < 10) b.crown = { h: 3.5, dir: 35 }; return; }
   const near = (x, z, d) => Math.hypot(cx - x, cz - z) < d;
   if (b.t === 'tr' || (b.t === 'ye' && (near(-21, -159, 12) || near(20, -157, 12)))) {
     b.st = ST.TRN; b.fh = 4; b.wall = C(near(-21, -159, 12) || near(20, -157, 12) ? '#d6d6d0' : '#9c998f'); b.acc = C('#34434b'); return;
@@ -478,7 +478,7 @@ export function buildCity(roads, col) {
     // shop signs & awnings on street fronts
     for (const e of edges) {
       if (!e || !e.front) continue;
-      const retail = b.st === ST.RET; if (!retail && r() < 0.35) continue;
+      const retail = b.st === ST.RET; if (b.noSigns || (!retail && r() < 0.35)) continue; // NAC: bank / office lobbies behind a colonnade, no shop signs
       const nU = Math.max(1, Math.round(e.L / 7.5)); const uw = e.L / nU;
       const sy0 = retail ? Math.min(3.62, H - 1.2) : 4.55, sy1 = sy0 + (retail ? 0.85 : 0.75);
       for (let k = 0; k < nU; k++) {

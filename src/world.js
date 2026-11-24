@@ -153,7 +153,9 @@ function ribbon(p, w, y, off, out, uvAlong, along0 = 0) {
   }
   return s;
 }
-function geomFrom(out) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(out.pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(out.uv, 2)); const nn = new Float32Array(out.pos.length); for (let i = 1; i < nn.length; i += 3) nn[i] = 1; g.setAttribute('normal', new THREE.BufferAttribute(nn, 3)); g.computeBoundingSphere(); return g; }
+// flat ground ribbons must face up whatever the direction of travel was (a downward triangle is culled from above)
+function faceUp(out) { const P = out.pos, U = out.uv; for (let i = 0; i + 8 < P.length; i += 9) { const ax = P[i + 3] - P[i], az = P[i + 5] - P[i + 2], bx = P[i + 6] - P[i], bz = P[i + 8] - P[i + 2]; if (az * bx - ax * bz < 0) { for (let k = 0; k < 3; k++) { const t = P[i + 3 + k]; P[i + 3 + k] = P[i + 6 + k]; P[i + 6 + k] = t; } const j = i / 9 * 6; if (U && U.length > j + 5) for (let k = 0; k < 2; k++) { const t = U[j + 2 + k]; U[j + 2 + k] = U[j + 4 + k]; U[j + 4 + k] = t; } } } }
+function geomFrom(out) { faceUp(out); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(out.pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(out.uv, 2)); const nn = new Float32Array(out.pos.length); for (let i = 1; i < nn.length; i += 3) nn[i] = 1; g.setAttribute('normal', new THREE.BufferAttribute(nn, 3)); g.computeBoundingSphere(); return g; }
 
 function buildRoads(roads, tex) {
   const asphalt = { pos: [], uv: [] }, walk = { pos: [], uv: [] }, solid = { pos: [], uv: [] }, yellow = { pos: [], uv: [] }, dashed = { pos: [], uv: [] };
@@ -174,8 +176,8 @@ function buildRoads(roads, tex) {
   }
   // ---- curbs: a pale 15 cm concrete kerb with a darker gutter along both edges of every street, broken where the
   // edge runs across another carriageway (intersections, driveways onto arterials)
-  const RS = 1, RN = Math.ceil(EXT * 2 / RS), cover = new Uint8Array(RN * RN);
-  for (const r of roads) { if (!r.w || r.t === 'ser') continue; const h = r.w / 2 + 0.2; for (let i = 0; i < r.p.length - 1; i++) { const a = r.p[i], b = r.p[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); const ux = (b[0] - a[0]) / (L || 1), uz = (b[1] - a[1]) / (L || 1); for (let s = -h; s <= L + h; s += 0.5) { const x = a[0] + ux * s, z = a[1] + uz * s; for (let o = -h; o <= h; o += 0.5) { const ix = Math.floor((x - uz * o + EXT) / RS), iz = Math.floor((z + ux * o + EXT) / RS); if (ix >= 0 && iz >= 0 && ix < RN && iz < RN) cover[ix + iz * RN] = 1; } } } }
+  const RS = 0.5, RN = Math.ceil(EXT * 2 / RS), cover = new Uint8Array(RN * RN);
+  for (const r of roads) { if (!r.w || r.t === 'ser') continue; const h = r.w / 2 + 0.05; for (let i = 0; i < r.p.length - 1; i++) { const a = r.p[i], b = r.p[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); const ux = (b[0] - a[0]) / (L || 1), uz = (b[1] - a[1]) / (L || 1); for (let s = -h; s <= L + h; s += 0.25) { const x = a[0] + ux * s, z = a[1] + uz * s; for (let o = -h; o <= h; o += 0.25) { const ix = Math.floor((x - uz * o + EXT) / RS), iz = Math.floor((z + ux * o + EXT) / RS); if (ix >= 0 && iz >= 0 && ix < RN && iz < RN) cover[ix + iz * RN] = 1; } } } }
   const covered = (x, z) => { const ix = Math.floor((x + EXT) / RS), iz = Math.floor((z + EXT) / RS); return ix >= 0 && iz >= 0 && ix < RN && iz < RN && cover[ix + iz * RN] === 1; };
   const curb = { pos: [], uv: [], nrm: [] }, gutter = { pos: [], uv: [] };
   const CH = 0.15, CW = 0.22;
@@ -188,7 +190,7 @@ function buildRoads(roads, tex) {
       const n = Math.ceil(L / 2);
       for (let k = 0; k < n; k++) {
         const s0 = L * k / n, s1 = L * (k + 1) / n, sm = (s0 + s1) / 2;
-        const off = r.w / 2, mx = a[0] + tx * sm + nx * (off + 0.6), mz = a[1] + tz * sm + nz * (off + 0.6);
+        const off = r.w / 2, mx = a[0] + tx * sm + nx * (off + 0.4), mz = a[1] + tz * sm + nz * (off + 0.4);
         if (covered(mx, mz)) continue;
         const P = (s, o, y, u, v) => [a[0] + tx * s + nx * o, y, a[1] + tz * s + nz * o, u, v];
         quad(curb, P(s0, off, 0.03, s0, 0), P(s1, off, 0.03, s1, 0), P(s1, off, CH, s1, 0.15), P(s0, off, CH, s0, 0.15), [-nx, 0, -nz]); // kerb face
