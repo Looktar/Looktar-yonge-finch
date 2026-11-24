@@ -6,6 +6,10 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { N8AOPass } from 'n8ao';
+import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
+import { WET } from './pbr.js';
+import { makeFinalPass } from './post.js';
+import { Feel, TUNE as FEEL } from './feel.js';
 import { buildWorld, makeTextures, EXT, CELL, GN, PLAY_C, PLAY_R, START, rng } from './world.js';
 import { Particles, makeSky, Sfx, SUN } from './fx.js';
 import { loadZombieAssets, ZombieActor, zombiePose } from './zombie.js';
@@ -13,7 +17,7 @@ import { isTouch, initTouch } from './touch.js';
 import { buildRifle, buildShotgun, buildPistol, flashTextures, makeFlash, casingGeo, mats } from './weapons.js';
 
 const $ = id => document.getElementById(id);
-const QUAL = { high: { pr: 1.5, bloom: true, shadow: 4096, aa: true, ao: 'full', lights: 6 }, mid: { pr: 1, bloom: true, shadow: 2048, aa: true, ao: 'half', lights: 4 }, low: { pr: 0.75, bloom: false, shadow: 0, aa: false, ao: false, lights: 2 } };
+const QUAL = { high: { pr: 1.5, bloom: true, shadow: 4096, aa: true, ao: 'full', lights: 6, refl: 0.6 }, mid: { pr: 1, bloom: true, shadow: 2048, aa: true, ao: 'half', lights: 4, refl: 0.45 }, low: { pr: 0.75, bloom: false, shadow: 0, aa: false, ao: false, lights: 2, refl: 0 } };
 const TOUCH = isTouch(); if (TOUCH) { document.body.classList.add('touch'); QUAL.low.pr = 1; QUAL.mid.pr = 1; }
 let Q = TOUCH ? QUAL.low : QUAL.mid; if (TOUCH) $('q-low').checked = true;
 try { const s = localStorage.getItem('yf_q'); if (s && QUAL[s]) { Q = QUAL[s]; $('q-' + s).checked = true; } } catch (e) { }
@@ -56,6 +60,22 @@ const sky = makeSky(); scene.add(sky);
 const tex = makeTextures();
 const W = buildWorld(scene, tex, Q);
 const col = W.col;
+
+// ---- after rain: a planar mirror of the whole scene at y = 0 feeds the wet road / puddle shaders ----
+let frameNo = 0;
+const mirror = new Reflector(new THREE.PlaneGeometry(2400, 2400), { textureWidth: 512, textureHeight: 512, clipBias: 0.02, multisample: 0 });
+mirror.rotateX(-Math.PI / 2); mirror.position.y = 0.035; mirror.material.colorWrite = false; mirror.material.depthWrite = false; mirror.renderOrder = -10; mirror.castShadow = mirror.receiveShadow = false;
+{
+  const draw = mirror.onBeforeRender; let last = -1; const blank = new THREE.DataTexture(new Uint8Array(4), 1, 1); blank.needsUpdate = true;
+  mirror.onBeforeRender = (r, sc, cam, ...rest) => {
+    if (cam !== camera || last === frameNo || !(Q.refl > 0)) return; last = frameNo;
+    const sm = r.shadowMap.autoUpdate; r.shadowMap.autoUpdate = false; WET.uReflOn.value = 0; WET.tRefl.value = blank; // no feedback loop while drawing the mirror
+    draw.call(mirror, r, sc, cam, ...rest);
+    r.shadowMap.autoUpdate = sm; WET.tRefl.value = mirror.getRenderTarget().texture; WET.uReflOn.value = 1;
+  };
+  WET.uTexMat.value = mirror.material.uniforms.textureMatrix.value; WET.tRefl.value = mirror.getRenderTarget().texture;
+}
+scene.add(mirror);
 
 // environment = the dusk sky itself (glass towers mirror the sunset), dark ground below the horizon
 {
@@ -110,7 +130,8 @@ aoPass.setQualityMode('Medium'); composer.addPass(aoPass);
 let vmPass = null; // added once vmScene exists
 vmPass = new RenderPass(vmScene, vmCam); vmPass.clear = false; vmPass.clearDepth = true; composer.addPass(vmPass);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.42, 0.5, 0.95); composer.addPass(bloom);
-composer.addPass(new OutputPass());
+const finalPass = makeFinalPass(); composer.addPass(finalPass); // Saltline-style camera pass (tone map, look, shafts, grain) instead of OutputPass
+{ const r0 = finalPass.render.bind(finalPass); let tPrev = performance.now(); finalPass.render = (r, wb, rb, dt, mask) => { const t = performance.now(); finalPass.update(r, rb.texture, Math.min(0.1, (t - tPrev) / 1000), camera, SUN); tPrev = t; r0(r, wb, rb, dt, mask); }; }
 const smaa = new SMAAPass(innerWidth, innerHeight); composer.addPass(smaa);
 const grade = new ShaderPass({
   uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uDmg: { value: 0 }, uLow: { value: 0 } },
@@ -118,17 +139,18 @@ const grade = new ShaderPass({
   fragmentShader: `uniform sampler2D tDiffuse; uniform float uTime; uniform float uDmg; uniform float uLow; varying vec2 vUv;
     float h(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233))+uTime*7.0)*43758.5453); }
     void main(){ vec2 d=vUv-0.5; float r=length(d);
-      vec3 c; float ca = 0.0015 + uDmg*0.006; c.r=texture2D(tDiffuse, vUv+d*ca).r; c.g=texture2D(tDiffuse, vUv).g; c.b=texture2D(tDiffuse, vUv-d*ca).b;
-      float l=dot(c,vec3(0.299,0.587,0.114)); c=mix(vec3(l),c,0.95 - uLow*0.55); c*=vec3(1.02,1.0,0.97);
-      c*=1.0-smoothstep(0.4,0.9,r)*0.5; c=mix(c, vec3(0.5,0.0,0.0), smoothstep(0.25,0.75,r)*uDmg*0.9);
-      c+= (h(vUv*800.0)-0.5)*0.018; gl_FragColor=vec4(c,1.0);} `,
+      vec3 c; float ca = uDmg*0.006; // base aberration / vignette / grain now live in the final camera pass c.r=texture2D(tDiffuse, vUv+d*ca).r; c.g=texture2D(tDiffuse, vUv).g; c.b=texture2D(tDiffuse, vUv-d*ca).b;
+      float l=dot(c,vec3(0.299,0.587,0.114)); c=mix(vec3(l),c,1.0 - uLow*0.55);
+      c=mix(c, vec3(0.5,0.0,0.0), smoothstep(0.25,0.75,r)*uDmg*0.9);
+      gl_FragColor=vec4(c,1.0);} `,
 });
 composer.addPass(grade);
 
 function applyQuality() {
-  renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); composer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); composer.setSize(innerWidth, innerHeight); if (typeof finalPass !== 'undefined') { const pr = Math.min(devicePixelRatio, Q.pr); finalPass.setSize(innerWidth * pr, innerHeight * pr); }
   bloom.enabled = Q.bloom; lampLights.forEach((l, i) => l.visible = i < Q.lights);
   aoPass.enabled = !!Q.ao; basePass.enabled = !Q.ao; aoPass.configuration.halfRes = Q.ao !== 'full'; smaa.enabled = Q.aa;
+  if (typeof mirror !== 'undefined') { mirror.visible = Q.refl > 0; WET.uReflOn.value = Q.refl > 0 ? 1 : 0; const pr = Math.min(devicePixelRatio, Q.pr); mirror.getRenderTarget().setSize(Math.max(64, Math.round(innerWidth * pr * Q.refl)), Math.max(64, Math.round(innerHeight * pr * Q.refl))); }
   if (typeof sun !== 'undefined') { const on = Q.shadow > 0; if (sun.castShadow !== on || (on && sun.shadow.mapSize.x !== Q.shadow)) { sun.castShadow = on; if (on) { sun.shadow.mapSize.set(Q.shadow, Q.shadow); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } } scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); } }
 }
 applyQuality();
@@ -148,6 +170,18 @@ const tracers = []; for (let i = 0; i < 8; i++) { const g = new THREE.BufferGeom
 // ejected casings
 const CASN = 48; const casMesh = [casingGeo(0), casingGeo(1), casingGeo(2)].map((g, k) => { const m = new THREE.InstancedMesh(g, k === 1 ? mats().shell : mats().brass, CASN); m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; });
 const casings = [];
+// bullet holes: dark hole, torn rim and a soot fan, on walls and the ground (pooled instanced quads)
+const DECN = 120;
+const decals = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 30); gr.addColorStop(0, 'rgba(6,5,5,1)'); gr.addColorStop(0.16, 'rgba(10,9,8,1)'); gr.addColorStop(0.24, 'rgba(70,66,60,0.9)'); gr.addColorStop(0.4, 'rgba(25,22,20,0.55)'); gr.addColorStop(1, 'rgba(20,18,16,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  g.strokeStyle = 'rgba(15,13,12,0.7)'; g.lineWidth = 1.2; for (let i = 0; i < 7; i++) { const a = Math.random() * 6.28; g.beginPath(); g.moveTo(32 + Math.cos(a) * 5, 32 + Math.sin(a) * 5); g.lineTo(32 + Math.cos(a) * (11 + Math.random() * 9), 32 + Math.sin(a) * (11 + Math.random() * 9)); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.16, 0.16), new THREE.MeshStandardMaterial({ map: t, transparent: true, depthWrite: false, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -6 }), DECN);
+  m.count = 0; m.frustumCulled = false; m.renderOrder = 5; scene.add(m);
+  let i = 0; const q = new THREE.Quaternion(), qr = new THREE.Quaternion(), z = new THREE.Vector3(0, 0, 1), sc = new THREE.Vector3(), mm = new THREE.Matrix4();
+  return { add(p, n, size = 1) { q.setFromUnitVectors(z, n); qr.setFromAxisAngle(z, Math.random() * 6.28); q.multiply(qr); sc.setScalar(size * (0.7 + Math.random() * 0.6)); mm.compose(p, q, sc); m.setMatrixAt(i, mm); i = (i + 1) % DECN; m.count = Math.max(m.count, i === 0 ? DECN : i); m.instanceMatrix.needsUpdate = true; } };
+})();
 
 // ---------- zombies (rigged, animated characters) ----------
 const ZMAX = TOUCH ? 18 : 36;
@@ -186,6 +220,7 @@ const S = {
 };
 try { S.best = +localStorage.getItem('yf_best') || 0; } catch (e) { }
 const player = { x: START[0], z: START[1], vx: 0, vz: 0, y: 1.7, vy: 0, yaw: 0.22, pitch: 0.02, bob: 0 };
+const feel = new Feel();
 const keys = {}; let mouseDown = false, locked = false, dragLook = false;
 const sfx = new Sfx();
 const pickups = [];
@@ -209,14 +244,14 @@ addEventListener('mouseup', e => { if (e.button === 0) mouseDown = false; if (e.
 addEventListener('mousemove', e => {
   if (S.state !== 'play') return; if (!locked && !dragLook) return;
   const sens = 0.0022 * (+$('sens').value || 1) * (camera.fov / 72);
-  player.yaw -= e.movementX * sens; player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch - e.movementY * sens));
+  player.yaw -= e.movementX * sens; player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch - e.movementY * sens)); feel.look(e.movementX, e.movementY);
 });
 document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === canvas; if (!locked && S.state === 'play' && !S.noLock) pause(); });
 document.addEventListener('pointerlockerror', () => { S.noLock = true; $('nolock').style.display = 'block'; });
 let TC = null;
 const touchApi = {
   state: () => S.state,
-  look: (dx, dy) => { const k = 0.0042 * (+$('sens').value || 1) * (camera.fov / 72); player.yaw -= dx * k; player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch - dy * k)); },
+  look: (dx, dy) => { const k = 0.0042 * (+$('sens').value || 1) * (camera.fov / 72); player.yaw -= dx * k; player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch - dy * k)); feel.look(dx * 1.5, dy * 1.5); },
   fire: on => { mouseDown = on; }, toggleAds: () => { S.adsHeld = !S.adsHeld; }, ads: () => !!S.adsHeld,
   reload: () => reload(), jump: d => { keys.Space = d; }, swap: () => setWeapon((S.wi + 1) % 3),
   light: () => { S.flashOn = !S.flashOn; flash.visible = S.flashOn; sfx.click(); }, pause: () => pause(),
@@ -248,7 +283,7 @@ function fire() {
   const w = WEAP[S.wi], a = S.ammo[S.wi];
   if (S.reloadT > 0 || S.fireT > 0) return;
   if (a.mag <= 0) { sfx.click(); S.fireT = 0.25; reload(); return; }
-  a.mag--; S.fireT = w.rate; S.kick += w.kick; S.flashT = 0.05; sfx.shot(w.snd);
+  a.mag--; S.fireT = w.rate; feel.fire(player, w.kick, Math.min(3, w.kick / 0.012), S.ads || 0); S.flashT = 0.05; sfx.shot(w.snd);
   camera.getWorldPosition(org); let killedAny = false;
   vmCam.updateMatrixWorld(true); const muzzleW = camera.localToWorld(w.vm.localToWorld(w.vm.userData.muzzle.clone()));
   ejectCasing(w); w.flash.visible = true; w.flash.rotation.z = Math.random() * 6; w.flash.scale.setScalar(0.8 + Math.random() * 0.5); S.fireAnim = 1;
@@ -281,6 +316,7 @@ function fire() {
       hitMark(head);
       if (best.hp <= 0) { killZombie(best, head); killedAny = true; } else if (head) sfx.head(); else sfx.hit();
     } else if (bt < 219) {
+      { const ground = hy < 0.08; const nrm = ground ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(-ray.x, 0, -ray.z).normalize(); decals.add(new THREE.Vector3(hx, ground ? 0.045 : hy, hz).addScaledVector(nrm, 0.012), nrm, w.pel > 1 ? 0.6 : 1); }
       for (let k = 0; k < 6; k++) pAdd.emit(hx, hy, hz, (Math.random() - 0.5) * 4 - ray.x * 2, Math.random() * 3, (Math.random() - 0.5) * 4 - ray.z * 2, 0.25 + Math.random() * 0.2, 0.03, 1, 0.75, 0.4, 1, 12, 1);
       for (let k = 0; k < 3; k++) pNorm.emit(hx, hy, hz, (Math.random() - 0.5), Math.random() * 0.8, (Math.random() - 0.5), 0.8, 0.12, 0.35, 0.35, 0.35, 0.35, -0.3, 1, 0.5);
     }
@@ -306,10 +342,11 @@ function updateCasings(dt) {
     const m = casMesh[c.k]; if (cnt[c.k] >= CASN) continue; _q.setFromEuler(c.r); _m.compose(c.p, _q, _v.set(1, 1, 1)); m.setMatrixAt(cnt[c.k]++, _m); }
   casMesh.forEach((m, k) => { m.count = cnt[k]; m.instanceMatrix.needsUpdate = true; });
 }
-let hmT = 0; function hitMark(head) { const h = $('hm'); h.className = head ? 'on head' : 'on'; hmT = 0.12; }
+let hmT = 0; function hitMark(head, kill) { const h = $('hm'); h.className = 'on' + (head ? ' head' : '') + (kill ? ' kill' : ''); hmT = kill ? 0.32 : 0.14;
+  try { const sc = kill ? 1.7 : head ? 1.35 : 1.15; h.animate([{ transform: `translate(-50%,-50%) rotate(45deg) scale(${sc})`, opacity: 1 }, { transform: 'translate(-50%,-50%) rotate(45deg) scale(1)', opacity: 1, offset: 0.35 }, { transform: 'translate(-50%,-50%) rotate(45deg) scale(0.9)', opacity: 0 }], { duration: hmT * 1000, easing: 'ease-out' }); } catch (e) { } }
 
 function killZombie(z, head) {
-  z.dead = 0; S.kills++; S.alive--; if (head) S.heads++; S.score += (z.type === 'brute' ? 500 : 100) + (head ? 50 : 0);
+  z.dead = 0; S.kills++; S.alive--; if (head) S.heads++; S.hitStop = head ? 0.06 : 0.04; feel.shake(0.12); hitMark(head, true); S.score += (z.type === 'brute' ? 500 : 100) + (head ? 50 : 0);
   sfx.groan(0, 0.25, z.type === 'brute');
   const r = Math.random(); if (r < 0.14) dropPickup(z.x, z.z, 'ammo'); else if (r < 0.2 || (z.type === 'brute')) dropPickup(z.x, z.z, z.type === 'brute' ? 'med' : 'med');
   hud();
@@ -383,6 +420,7 @@ function drawMinimap() {
 let last = performance.now(), lampT = 0, locT = 0, sirenT = 14, stepT = 0;
 const fwd = new THREE.Vector3(), tmp = { x: 0, z: 0 };
 function update(dt) {
+  if (S.hitStop > 0) { S.hitStop -= dt; dt *= 0.15; } // a few frames of hit-stop on kills
   S.time += dt;
   // --- player movement ---
   const sprint = (keys.ShiftLeft || keys.ShiftRight || (TC && TC.move.sprint)) && S.stamina > 0.05;
@@ -397,14 +435,16 @@ function update(dt) {
   const dc = Math.hypot(p.x - PLAY_C[0], p.z - PLAY_C[1]); if (dc > PLAY_R) { p.x = PLAY_C[0] + (p.x - PLAY_C[0]) / dc * PLAY_R; p.z = PLAY_C[1] + (p.z - PLAY_C[1]) / dc * PLAY_R; }
   $('edge').style.opacity = dc > PLAY_R - 25 ? 1 : 0;
   player.x = p.x; player.z = p.z;
+  const wasAir = player.y > 1.701, vy0 = player.vy;
   if (keys.Space && player.y <= 1.701) player.vy = 4.6; player.vy -= 13 * dt; player.y = Math.max(1.7, player.y + player.vy * dt); if (player.y <= 1.7) player.vy = 0;
+  if (wasAir && player.y <= 1.7) feel.landed(-vy0);
   const moving = Math.hypot(player.vx, player.vz); player.bob += moving * dt * 1.9;
   stepT -= moving * dt; if (stepT < 0 && player.y <= 1.71) { stepT = 1.6; sfx.step(); }
   // --- camera ---
-  S.kick *= Math.exp(-dt * 10);
   camera.position.set(player.x, player.y + Math.sin(player.bob * 2) * 0.04 * Math.min(1, moving / 4), player.z);
-  const shake = S.dmgT * 0.03;
-  camera.rotation.set(player.pitch + S.kick + (Math.random() - 0.5) * shake, player.yaw + (Math.random() - 0.5) * shake, 0);
+  const strafe = player.vx * Math.cos(player.yaw) - player.vz * Math.sin(player.yaw);
+  const fo = feel.update(dt, strafe);
+  camera.rotation.set(player.pitch + fo.pitch, player.yaw + fo.yaw, fo.roll + strafe * -0.0025);
   // --- weapon ---
   const w = WEAP[S.wi], a = S.ammo[S.wi];
   S.fireT -= dt;
@@ -414,13 +454,13 @@ function update(dt) {
   const wantAds = S.adsHeld && S.reloadT <= 0 && !(sprint && moving > 5) ? 1 : 0; S.ads = (S.ads || 0) + (wantAds - (S.ads || 0)) * Math.min(1, dt * 12); const ads = S.ads;
   S.swap = Math.max(0, (S.swap || 0) - dt); S.fireAnim = Math.max(0, (S.fireAnim || 0) - dt * 14);
   const bobK = Math.min(1, moving / 4) * (1 - ads * 0.85); const sprintK = sprint && moving > 5 ? 1 : 0;
-  const hx = ud.hip.x, hy = ud.hip.y, hz = ud.hip.z, ax = -ud.sight.x, ay = -ud.sight.y, az = ud.adsZ - ud.sight.z;
-  w.vm.position.set(hx + (ax - hx) * ads + Math.sin(player.bob) * 0.012 * bobK + sprintK * 0.03, hy + (ay - hy) * ads - Math.abs(Math.cos(player.bob)) * 0.01 * bobK - rl * 0.08 - S.swap * 0.6 - sprintK * 0.03, hz + (az - hz) * ads + S.kick * (2.2 - ads * 1.4));
-  w.vm.rotation.set(S.kick * (2.6 - ads * 1.8) + rl * 0.5 - sprintK * 0.35, (1 - ads) * 0.07 + sprintK * 0.55, rl * 0.6 + sprintK * 0.25);
+  const hx = ud.hip.x, hy = ud.hip.y, hz = ud.hip.z, ax = -ud.sight.x, ay = -ud.sight.y, az = ud.adsZ - ud.sight.z; const vo = feel.vm();
+  w.vm.position.set(hx + (ax - hx) * ads + Math.sin(player.bob) * 0.012 * bobK + sprintK * 0.03, hy + (ay - hy) * ads - Math.abs(Math.cos(player.bob)) * 0.01 * bobK - rl * 0.08 - S.swap * 0.6 - sprintK * 0.03, hz + (az - hz) * ads + vo.z * (1 - ads * 0.5)); w.vm.position.x += vo.x * (1 - ads * 0.6); w.vm.position.y += vo.y * (1 - ads * 0.6);
+  w.vm.rotation.set(vo.rx * (1 - ads * 0.6) + rl * 0.5 - sprintK * 0.35, (1 - ads) * 0.07 + sprintK * 0.55 + vo.ry * (1 - ads * 0.6), rl * 0.6 + sprintK * 0.25 + vo.rz * (1 - ads * 0.5));
   if (ud.mag) { ud.mag.position.y = -Math.max(0, Math.sin(rp * Math.PI * 1.0)) * 0.22 * (rp > 0.2 && rp < 0.85 ? 1 : Math.max(0, Math.sin(rp * Math.PI))); }
   if (ud.pump) { const pa = S.fireT > 0 && w.cas === 1 ? Math.sin(Math.max(0, Math.min(1, (w.rate - S.fireT) / 0.45)) * Math.PI) : 0; ud.pump.position.z = pa * 0.08; }
   if (ud.slide) ud.slide.position.z = S.fireAnim * 0.025;
-  const fovT = 72 + (ud.fov - 72) * ads; if (Math.abs(camera.fov - fovT) > 0.01) { camera.fov = fovT; camera.updateProjectionMatrix(); vmCam.fov = 66 + (ud.fov - 66) * ads; vmCam.updateProjectionMatrix(); }
+  const fovT = 72 + (ud.fov - 72) * ads + sprintK * FEEL.sprintFov * (1 - ads); if (Math.abs(camera.fov - fovT) > 0.01) { camera.fov += (fovT - camera.fov) * Math.min(1, dt * 10); camera.updateProjectionMatrix(); vmCam.fov = 66 + (ud.fov - 66) * ads; vmCam.updateProjectionMatrix(); }
   $('xh').style.opacity = 1 - ads;
   w.flash.visible = S.flashT > 0; muzzleLight.intensity = S.flashT > 0 ? 40 : 0; vmMuzzle.intensity = S.flashT > 0 ? 3 : 0; if (S.flashT > 0) { muzzleLight.position.copy(ud.muzzle).applyMatrix4(w.vm.matrix); vmMuzzle.position.copy(muzzleLight.position); } S.flashT -= dt;
   updateCasings(dt);
@@ -459,7 +499,7 @@ function updateZombies(dt) {
       if (z.los || d < 3) { mx = dx / d; mz = dz / d; } else if (flowDir(z.x, z.z, tmp)) { mx = tmp.x; mz = tmp.z; } else { mx = dx / d; mz = dz / d; }
       const reach = 1.05 * z.sc + 0.35;
       let sp = z.sp * (z.stag > 0 ? 0.25 : 1); z.stag -= dt; z.flash -= dt;
-      if (d < reach) { sp = 0; z.atkT -= dt; if (z.atkT <= 0) { z.atkT = z.type === 'run' ? 0.8 : 1.1; z.swing = 0.35; if (S.state === 'play') { S.hp -= z.dmg; S.dmgT = Math.min(1, S.dmgT + 0.6); S.lastHurt = S.time; sfx.hurt(); } } }
+      if (d < reach) { sp = 0; z.atkT -= dt; if (z.atkT <= 0) { z.atkT = z.type === 'run' ? 0.8 : 1.1; z.swing = 0.35; if (S.state === 'play') { S.hp -= z.dmg; S.dmgT = Math.min(1, S.dmgT + 0.6); feel.shake(0.55); S.lastHurt = S.time; sfx.hurt(); } } }
       else z.atkT = Math.min(z.atkT, 0.35);
       z.swing = Math.max(0, (z.swing || 0) - dt);
       const tyaw = Math.atan2(dx, dz); let dy = tyaw - z.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); z.yaw += dy * Math.min(1, dt * 6);
@@ -517,7 +557,7 @@ function ambient(dt, t) {
 }
 
 function frame(now) {
-  requestAnimationFrame(frame);
+  requestAnimationFrame(frame); frameNo++;
   let dt = Math.min(0.05, (now - last) / 1000); last = now;
   const t = now / 1000;
   if (S.state === 'play') update(dt);
@@ -538,4 +578,4 @@ computeFlow(START[0], START[1]);
 // a few shamblers for the title screen
 
 requestAnimationFrame(frame);
-window.__yf = { S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun };
+window.__yf = { S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun, tick: () => frameNo++, mirror, WET, finalPass };
