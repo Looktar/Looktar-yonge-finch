@@ -514,6 +514,27 @@ export function buildWorld(scene, tex, quality) {
     let ang = Math.atan2(ux, uz) + (r() < 0.5 ? 0 : Math.PI); if (r() < 0.25) ang += (r() - 0.5) * 2.2; else ang += (r() - 0.5) * 0.25;
     tryCar(x + nx * off, z + nz * off, ang);
   });
+  // surface parking lots (OSM amenity=parking) filled like the Apple Maps imagery: double-loaded rows of
+  // 2.7 m x 5.4 m stalls facing each other across 7 m aisles, about two thirds occupied
+  {
+    let parked = 0;
+    for (const line of A.split('\n')) {
+      const f = line.split('|'); if (f[1] !== 'lot') continue; const p = dec(f[2]); if (p.length < 3) continue;
+      if (!p.some(q => Math.hypot(q[0] - PLAY_C[0], q[1] - PLAY_C[1]) < PLAY_R)) continue;
+      let best = 0, ux = 1, uz = 0; for (let i = 0; i < p.length; i++) { const a = p[i], b = p[(i + 1) % p.length]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L > best) { best = L; ux = (b[0] - a[0]) / L; uz = (b[1] - a[1]) / L; } }
+      const vx = -uz, vz = ux; let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+      for (const q of p) { const u = q[0] * ux + q[1] * uz, w = q[0] * vx + q[1] * vz; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, w); v1 = Math.max(v1, w); }
+      for (let w = v0 + 3.2; w < v1 - 2.7; w += 17.8) for (const row of [0, 1]) {
+        const wc = w + row * 5.4; const ang0 = Math.atan2(vx, vz) + (row ? 0 : Math.PI);
+        for (let u = u0 + 2; u < u1 - 1.5; u += 2.7) {
+          const x = ux * u + vx * wc, z = uz * u + vz * wc;
+          if (!pip(x, z, p) || r() > 0.66 || parked > 420) continue;
+          if (Math.hypot(x - PLAY_C[0], z - PLAY_C[1]) > PLAY_R - 10 || col.isBlocked(x, z) || onRoad(x, z)) continue;
+          cars.push({ x, z, a: ang0 + (r() - 0.5) * 0.06, c: carColors[Math.floor(r() * carColors.length)], burn: false, haz: false }); parked++;
+        }
+      }
+    }
+  }
   // a pile-up at the intersection
   for (let i = 0; i < 6; i++) tryCar(XING[0] + (r() - 0.5) * 26, XING[1] + (r() - 0.5) * 26, r() * Math.PI * 2);
   const bysd = cars.slice().sort((a, b) => Math.hypot(a.x - XING[0], a.z - XING[1]) - Math.hypot(b.x - XING[0], b.z - XING[1]));

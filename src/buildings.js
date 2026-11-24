@@ -472,7 +472,7 @@ export function buildCity(roads, col) {
       const inf = [seed, ST.RGL, 0, 2]; const rc = b.acc.clone();
       for (const t of tri) gb.face(t.map(k => [p[k][0], wallTop(p[k][0], p[k][1]), p[k][1], p[k][0], p[k][1]]), [nr.x, nr.y, nr.z], inf, rc, b.acc);
     } else {
-      const rc = new THREE.Color().copy(b.st === ST.RET || b.st === ST.SLAB ? C('#6c6a66') : C('#7d7c78'));
+      const rc = new THREE.Color().copy(C(['#b8b6b0', '#c6c4be', '#a9a8a3', '#d0cfca'][Math.floor(seed) % 4])); // white / light-grey membrane roofs (Apple Maps imagery)
       const inf = [seed, ST.RFLAT, 0, 1];
       for (const t of capTris(p)) gb.face(t.map(k => [p[k][0], H, p[k][1], p[k][0], p[k][1]]), [0, 1, 0], inf, rc, white);
       // parapet
