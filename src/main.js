@@ -161,7 +161,7 @@ function applyQuality() {
   bloom.enabled = Q.bloom; if (typeof finalPass !== 'undefined') finalPass.enabled = !OFF('post'); if (typeof outPass !== 'undefined') outPass.enabled = OFF('post'); lampLights.forEach((l, i) => l.visible = i < Q.lights);
   if (OFF('ao')) Q.ao = false; if (OFF('wet')) Q.refl = 0; if (OFF('bloom')) Q.bloom = false;
   aoPass.enabled = !!Q.ao; basePass.enabled = !Q.ao; aoPass.configuration.halfRes = Q.ao !== 'full'; smaa.enabled = Q.aa;
-  if (typeof mirror !== 'undefined') { mirror.visible = Q.refl > 0; WET.uReflOn.value = Q.refl > 0 ? 1 : 0; const pr = Math.min(devicePixelRatio, Q.pr); mirror.getRenderTarget().setSize(Math.max(64, Math.round(innerWidth * pr * Q.refl)), Math.max(64, Math.round(innerHeight * pr * Q.refl))); }
+  if (typeof mirror !== 'undefined') { mirror.visible = Q.refl > 0; WET.uReflOn.value = Q.refl > 0 ? 1 : 0; if (!(Q.refl > 0)) WET.tRefl.value = WET.BLACK; const pr = Math.min(devicePixelRatio, Q.pr); mirror.getRenderTarget().setSize(Math.max(64, Math.round(innerWidth * pr * Q.refl)), Math.max(64, Math.round(innerHeight * pr * Q.refl))); }
   if (typeof sun !== 'undefined') { const on = Q.shadow > 0; if (sun.castShadow !== on || (on && sun.shadow.mapSize.x !== Q.shadow)) { sun.castShadow = on; if (on) { sun.shadow.mapSize.set(Q.shadow, Q.shadow); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } } scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); } }
 }
 applyQuality();
@@ -580,7 +580,7 @@ function frame(now) {
   if (S.state === 'play') drawMinimap();
   grade.uniforms.uTime.value = t; grade.uniforms.uDmg.value = S.state === 'play' ? Math.max(S.dmgT, S.hp < 30 ? 0.35 + Math.sin(t * 6) * 0.1 : 0) : 0; grade.uniforms.uLow.value = S.state === 'play' ? Math.max(0, (40 - S.hp) / 40) : 0;
   if (S.state === 'menu') updateZombies(dt * 0.6);
-  vmRoot.visible = S.state === 'play' || S.state === 'pause'; vmPass.enabled = vmRoot.visible;
+  vmRoot.visible = (S.state === 'play' || S.state === 'pause') && !window.__noVm; vmPass.enabled = vmRoot.visible;
   try { composer.render(); } catch (err) {
     console.error(err); renderFails = (renderFails || 0) + 1;
     if (renderFails === 3) { Q.refl = 0; Q.ao = false; finalPass.enabled = false; outPass.enabled = true; applyQuality(); const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99;color:#fb8;font:12px monospace;background:#000a;padding:4px 8px'; d.textContent = '渲染出错，已切换到简化画面：' + String(err && err.message || err).slice(0, 120); document.body.appendChild(d); }
@@ -592,4 +592,27 @@ computeFlow(START[0], START[1]);
 // a few shamblers for the title screen
 
 requestAnimationFrame(frame);
+// ---- #debug: on-device diagnosis panel (GPU name + feature toggles) ----
+if (HS === 'debug' || QS.has('debug')) {
+  const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info');
+  const gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+  const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:50%;top:60px;transform:translateX(-50%);z-index:99;background:#000c;color:#eee;font:13px/1.5 sans-serif;padding:8px 10px;border-radius:8px;max-width:92vw;pointer-events:auto';
+  const errs = []; const oe = console.error; console.error = (...a) => { errs.push(String(a[0]).slice(0, 160)); oe(...a); info(); };
+  const tog = {}; const T = (k, label, on, off) => { tog[k] = true; const bt = document.createElement('button'); bt.style.cssText = 'margin:3px;padding:6px 10px;font:13px sans-serif;border-radius:6px;border:0'; const paint = () => { bt.textContent = label + (tog[k] ? ' 开' : ' 关'); bt.style.background = tog[k] ? '#ffb35c' : '#555'; }; bt.onclick = e => { e.stopPropagation(); tog[k] = !tog[k]; (tog[k] ? on : off)(); paint(); }; ['touchstart', 'pointerdown', 'mousedown'].forEach(ev => bt.addEventListener(ev, e => e.stopPropagation())); paint(); return bt; };
+  const info = () => { head.textContent = 'GPU: ' + gpu + ' | 画质 ' + (TOUCH ? '手机' : '') + JSON.stringify(Q) + (errs.length ? ' | 错误: ' + errs.slice(-2).join(' / ') : ''); };
+  const head = document.createElement('div'); box.appendChild(head); info();
+  const env0 = scene.environment, fog0 = scene.fog;
+  const allMats = f => scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(f); });
+  box.append(
+    T('wet', '湿路面', () => { WET.uWet.value = 1; }, () => { WET.uWet.value = 0; WET.uReflOn.value = 0; WET.tRefl.value = WET.BLACK; }),
+    T('post', '新后处理', () => { finalPass.enabled = true; outPass.enabled = false; }, () => { finalPass.enabled = false; outPass.enabled = true; }),
+    T('env', '环境光', () => { scene.environment = env0; allMats(m => m.needsUpdate = true); }, () => { scene.environment = null; allMats(m => m.needsUpdate = true); }),
+    T('fog', '雾', () => { scene.fog = fog0; allMats(m => m.needsUpdate = true); }, () => { scene.fog = null; allMats(m => m.needsUpdate = true); }),
+    T('lights', '点光源', () => { lampLights.forEach(l => l.visible = true); muzzleLight.visible = true; }, () => { lampLights.forEach(l => l.visible = false); muzzleLight.visible = false; fireLights.forEach(l => l.visible = false); }),
+    T('clean', '清理通道', () => { sanitize.enabled = true; }, () => { sanitize.enabled = false; }),
+    T('grade', '受伤调色', () => { grade.enabled = true; }, () => { grade.enabled = false; }),
+    T('vm', '枪模', () => { window.__noVm = false; }, () => { window.__noVm = true; }),
+  );
+  document.body.appendChild(box);
+}
 window.__yf = { S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun, tick: () => frameNo++, mirror, WET, finalPass };

@@ -37,7 +37,7 @@ export function wallArrays() {
     const t = new THREE.DataArrayTexture(data, WS, WS, imgs.length);
     t.format = THREE.RGBAFormat; t.type = THREE.UnsignedByteType; t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.generateMipmaps = true; t.anisotropy = 8;
-    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    // no sRGB on the array: some iOS GPUs cannot build mipmaps for sRGB texture arrays (texture reads black); the facade shader decodes it
     t.needsUpdate = true; return { t, means };
   };
   out.ready = Promise.all([Promise.all(WALL_LAYERS.map(n => load(n + '_col'))), Promise.all(WALL_LAYERS.map(n => load(n + '_nor')))]).then(([cs, ns]) => {
@@ -52,7 +52,8 @@ export function wallArrays() {
 // ---- after-rain wet ground: shared by roads, sidewalks and the ground plane ----
 // WET.tRefl / uTexMat come from a half-resolution planar mirror of the scene (main.js); puddles are pools of
 // near-mirror water placed by world-space noise; everything else is damp (darker, smoother, sheen of the sky)
-export const WET = { tRefl: { value: null }, uTexMat: { value: new THREE.Matrix4() }, uWet: { value: 1 }, uReflOn: { value: 0 } };
+const BLACK = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); BLACK.needsUpdate = true;
+export const WET = { tRefl: { value: BLACK }, uTexMat: { value: new THREE.Matrix4() }, uWet: { value: 1 }, uReflOn: { value: 0 }, BLACK };
 const WET_NOISE = `
   float wh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float wn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(wh(i), wh(i + vec2(1, 0)), f.x), mix(wh(i + vec2(0, 1)), wh(i + vec2(1, 1)), f.x), f.y); }

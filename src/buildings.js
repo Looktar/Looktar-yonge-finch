@@ -317,7 +317,7 @@ export function facadeMaterial() {
         if (layer >= 0 && abs(vWN.y) < 0.5) {
           float tl = layer == ${L('brick')} ? ${T('brick')} : layer == ${L('stucco')} ? ${T('stucco')} : layer == ${L('granite')} ? ${T('granite')} : ${T('precast')};
           vec3 uvw = vec3(F.x / tl, -F.y / tl, float(layer));
-          vec3 tc = texture(uWC, uvw).rgb / uWM[layer];
+          vec3 tc = pow(texture(uWC, uvw).rgb, vec3(2.2)) / max(uWM[layer], vec3(0.02)); // array is stored raw (not sRGB)
           float k = layer == ${L('brick')} ? 1.0 : 0.85;
           vec3 wc = (layer == ${L('brick')} ? base : alb) * mix(vec3(1.0), tc, k);
           if (st <= 2) wc = mix(wc, vec3(0.36, 0.35, 0.33), 1.0 - step(0.5, F.y));
