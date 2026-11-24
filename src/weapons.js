@@ -151,7 +151,7 @@ export function buildRifle() {
   g.add(forearm([0.02, -0.13, 0.03], [0.1, -0.26, 0.26]));
   g.add(forearm([-0.05, -0.03, -0.29], [-0.2, -0.24, -0.02]));
   g.traverse(o => o.frustumCulled = false);
-  g.userData = { muzzle: new THREE.Vector3(0, 0.016, -0.67), eject: new THREE.Vector3(0.02, 0.03, -0.1), sight: new THREE.Vector3(0, dotV, -0.12), mag, hip: new THREE.Vector3(0.17, -0.17, -0.44), hipYaw: 0.21, hipRoll: 0.05, adsZ: -0.2, fov: 52 }; // canted to show the rail and sight side-on, like Saltline's carbine
+  g.userData = { muzzle: new THREE.Vector3(0, 0.016, -0.67), eject: new THREE.Vector3(0.02, 0.03, -0.1), sight: new THREE.Vector3(0, dotV, -0.12), mag, hip: new THREE.Vector3(0.2, -0.16, -0.5), hipYaw: 0.3, hipRoll: 0.07, adsZ: -0.2, fov: 52 }; // canted to show the rail and sight side-on, like Saltline's carbine
   return g;
 }
 
