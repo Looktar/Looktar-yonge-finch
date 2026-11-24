@@ -1,0 +1,15 @@
+name: 试玩反馈 / 想法
+description: 哪里不像真实的 Yonge/Finch、手感、想加的东西
+labels: [feedback]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 反馈
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: 地点（可选）
+      placeholder: 例如 西北角 NAC 北美中心、Finch 站公交总站
