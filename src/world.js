@@ -485,7 +485,7 @@ export function buildWorld(scene, tex, quality) {
     scene.add(new THREE.Mesh(board, new THREE.MeshStandardMaterial({ map: bt, emissiveMap: bt, emissive: 0xffffff, emissiveIntensity: 0.7, roughness: 0.6 })));
     col.addPoly([[bx - 0.5, bz - 0.5], [bx + 0.5, bz - 0.5], [bx + 0.5, bz + 0.5], [bx - 0.5, bz + 0.5]], false);
     const kc = document.createElement('canvas'); kc.width = 128; kc.height = 256; const k = kc.getContext('2d');
-    k.fillStyle = '#f3f3ef'; k.fillRect(0, 0, 128, 150); k.strokeStyle = '#111'; k.lineWidth = 5; k.strokeRect(6, 6, 116, 138);
+    k.fillStyle = '#d2d2cc'; k.fillRect(0, 0, 128, 150); k.strokeStyle = '#111'; k.lineWidth = 5; k.strokeRect(6, 6, 116, 138);
     k.fillStyle = '#111'; k.beginPath(); k.moveTo(48, 120); k.bezierCurveTo(48, 80, 82, 82, 82, 48); k.lineTo(70, 48); k.lineTo(90, 22); k.lineTo(108, 48); k.lineTo(96, 48); k.bezierCurveTo(96, 92, 62, 92, 62, 120); k.closePath(); k.fill();
     k.fillRect(20, 60, 22, 60); // the median island symbol
     for (let i = 0; i < 6; i++) { k.fillStyle = i % 2 ? '#111' : '#f2c400'; k.beginPath(); k.moveTo(0, 156 + i * 18); k.lineTo(128, 156 + i * 18 - 40); k.lineTo(128, 174 + i * 18 - 40); k.lineTo(0, 174 + i * 18); k.fill(); }
@@ -498,7 +498,7 @@ export function buildWorld(scene, tex, quality) {
       col.addPoly([[x - 0.15, z - 0.15], [x + 0.15, z - 0.15], [x + 0.15, z + 0.15], [x - 0.15, z + 0.15]], false);
     }
     scene.add(new THREE.Mesh(mergeGeometries(kpost), poleMat));
-    scene.add(new THREE.Mesh(mergeGeometries(kparts), new THREE.MeshStandardMaterial({ map: kt, roughness: 0.4, emissive: 0xffffff, emissiveMap: kt, emissiveIntensity: 0.08, side: THREE.DoubleSide })));
+    scene.add(new THREE.Mesh(mergeGeometries(kparts), new THREE.MeshStandardMaterial({ map: kt, roughness: 0.55, side: THREE.DoubleSide })));
   }
 
   // ---- cars ----
