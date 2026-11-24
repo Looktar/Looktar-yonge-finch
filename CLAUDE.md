@@ -26,7 +26,7 @@ npm run serve     # http://localhost:8765/ （必须走 http，file:// 下角色
 - 每个改动开新分支，提 PR 合并进 `main`；PR 模板在 `.github/PULL_REQUEST_TEMPLATE.md`。
 - 合并前：`npm run build && npm run check && npm run lint && npm test && npm run smoke` 全绿，冒烟截图亲自看一遍。
 - 发版时改 `package.json` 的 `version`（菜单底部显示），再 `npm run build`。
-- `main` 推送后 GitHub Actions 自动发布 `dist/` 到 GitHub Pages：https://looktar.github.io/looktar-yonge-finch/ （仓库 Settings → Pages → Source 要选 GitHub Actions）。claude.ai artifact 照旧手动发布。
+- `main` 推送后 GitHub Actions 自动发布 `dist/` 到 GitHub Pages：https://looktar.github.io/Looktar-yonge-finch/ （网址区分大小写；仓库 Settings → Pages → Source 已选 GitHub Actions）。claude.ai artifact 照旧手动发布。
 - 已知但还没修的 bug 先写成 `it.fails` 测试。
 
 ## 目录
