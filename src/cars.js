@@ -76,26 +76,48 @@ export function carGeoms(kind) {
   const N = all.attributes.normal.array;
   const split = list => { const pos = [], nor = []; for (const t of list) for (const i of t) { pos.push(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); nor.push(N[i * 3], N[i * 3 + 1], N[i * 3 + 2]); } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.computeBoundingSphere(); return g; };
   const body = split(parts.body), glass = split(parts.glass), trim = split(parts.trim);
-  // mirrors, front lights, full-width tail light bar
+  // details: mirrors, door handles, black bumpers + grille, plates, wheel-arch liners, lights
   const fz = hl - 0.06, rz = -hl + 0.05;
   const headY = profile(K.top, hl - 0.25) - 0.1, tailY = profile(K.top, -hl + 0.2) - 0.12;
-  const mirror = [-1, 1].map(sx => new THREE.BoxGeometry(0.16, 0.1, 0.2).translate(sx * (hw0 * 0.92 + 0.06), K.belt + 0.06, K.cabin[1] - 0.25).toNonIndexed());
-  const trimAll = mergeGeoms([trim, ...mirror]);
-  const head = mergeGeoms([-1, 1].map(sx => new THREE.BoxGeometry(0.42, 0.11, 0.06).translate(sx * hw0 * 0.62, headY, fz).toNonIndexed()));
-  const tail = mergeGeoms([new THREE.BoxGeometry(hw0 * 1.6, 0.1, 0.06).translate(0, tailY, rz).toNonIndexed()]);
-  const wb = K.base / 2, wx = hw0 * 0.86;
-  return { body, glass, trim: trimAll, head, tail, wheels: [[-wx, wb], [wx, wb], [-wx, -wb], [wx, -wb]], tyre: K.tyre, len: K.L, wid: K.W };
+  const B = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z).toNonIndexed();
+  const mirror = [-1, 1].flatMap(sx => [B(0.05, 0.05, 0.08, sx * (hw0 * 0.86 + 0.03), K.belt + 0.03, K.cabin[1] - 0.22), B(0.17, 0.1, 0.06, sx * (hw0 * 0.92 + 0.07), K.belt + 0.07, K.cabin[1] - 0.25)]);
+  const handles = [-1, 1].flatMap(sx => [0.35, -0.75].map(z => B(0.02, 0.025, 0.14, sx * (hw0 * 0.97), K.belt - 0.06, z)));
+  const bump = [B(K.W * 0.9, 0.17, 0.12, 0, yb + 0.12, hl - 0.03), B(K.W * 0.9, 0.17, 0.12, 0, yb + 0.12, -hl + 0.03)]; // lower bumper fascias
+  const grille = B(K.W * 0.46, 0.13, 0.04, 0, headY - 0.05, fz + 0.01);
+  const sideSkirt = [-1, 1].map(sx => B(0.04, 0.08, K.base - K.tyre * 2.4, sx * hw0 * 0.99, yb + 0.07, 0));
+  // arch liners: dark half-tubes inside each wheel opening so you never see through the body
+  const liners = [];
+  for (const az of [K.base / 2, -K.base / 2]) for (const sx of [-1, 1]) { const c = new THREE.CylinderGeometry(K.tyre + 0.07, K.tyre + 0.07, 0.3, 14, 1, true, 0, Math.PI); c.rotateZ(Math.PI / 2); c.rotateX(Math.PI / 2); c.rotateX(-Math.PI / 2); c.translate(sx * hw0 * 0.8, K.tyre, az); liners.push(c.toNonIndexed()); }
+  const trimAll = mergeGeoms([trim, ...mirror, ...handles, ...bump, grille, ...sideSkirt, ...liners]);
+  const head = mergeGeoms([-1, 1].map(sx => B(0.42, 0.11, 0.06, sx * hw0 * 0.62, headY, fz)));
+  const tail = mergeGeoms([B(hw0 * 1.6, 0.1, 0.06, 0, tailY, rz)]);
+  const plate = mergeGeoms([B(0.52, 0.13, 0.02, 0, yb + 0.15, hl + 0.035), B(0.52, 0.13, 0.02, 0, tailY - 0.2, -hl - 0.025)]);
+  const wb = K.base / 2, wx = hw0 * 0.84;
+  return { body, glass, trim: trimAll, head, tail, plate, wheels: [[-wx, wb], [wx, wb], [-wx, -wb], [wx, -wb]], tyre: K.tyre, len: K.L, wid: K.W };
 }
 
 function mergeGeoms(list) {
   const pos = [], nor = [];
-  for (const g of list) { const p = g.attributes.position.array, n = g.attributes.normal.array; for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); } }
+  for (const g of list) { const q = g.index ? g.toNonIndexed() : g; const p = q.attributes.position.array, n = q.attributes.normal.array; for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); } }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.computeBoundingSphere(); return g;
 }
 
-// tyre + alloy rim, axis along x, centred at the origin
+// tyre with a rounded sidewall and tread (lathe profile), five-spoke alloy, dark brake disc; axis along x
 export function wheelGeoms(r) {
-  const tyre = new THREE.CylinderGeometry(r, r, 0.22, 18).rotateZ(Math.PI / 2).toNonIndexed();
-  const rim = mergeGeoms([new THREE.CylinderGeometry(r * 0.62, r * 0.62, 0.235, 14).rotateZ(Math.PI / 2).toNonIndexed()]);
-  return { tyre, rim };
+  const w = 0.22, hw = w / 2, rr = r * 0.66; // rim radius
+  const prof = [[rr, -hw], [r - 0.035, -hw], [r - 0.008, -hw + 0.025], [r, -hw + 0.06], [r, hw - 0.06], [r - 0.008, hw - 0.025], [r - 0.035, hw], [rr, hw]].map(([a, b]) => new THREE.Vector2(a, b));
+  const tyre = new THREE.LatheGeometry(prof, 24); tyre.rotateZ(Math.PI / 2); // lathe axis y -> x
+  const parts = [];
+  const lip = new THREE.CylinderGeometry(rr, rr, w * 0.9, 24, 1, true); lip.rotateZ(Math.PI / 2); parts.push(lip);
+  for (const sx of [-1, 1]) {
+    const face = new THREE.CircleGeometry(rr * 0.98, 24); face.rotateY(sx * Math.PI / 2); face.translate(sx * hw * 0.55, 0, 0); // dark barrel face behind the spokes
+    void face;
+    for (let k = 0; k < 5; k++) { const sp = new THREE.BoxGeometry(0.03, rr * 0.92, 0.055); sp.translate(0, rr * 0.46, 0); sp.rotateX(k * Math.PI * 2 / 5); sp.translate(sx * hw * 0.82, 0, 0); parts.push(sp); }
+    const hub = new THREE.CylinderGeometry(0.06, 0.06, 0.04, 12); hub.rotateZ(Math.PI / 2); hub.translate(sx * hw * 0.85, 0, 0); parts.push(hub);
+  }
+  const rim = mergeGeoms(parts);
+  const discParts = [];
+  for (const sx of [-1, 1]) { const d = new THREE.CircleGeometry(rr * 0.97, 24); d.rotateY(sx * Math.PI / 2); d.translate(sx * hw * 0.6, 0, 0); discParts.push(d); }
+  const disc = mergeGeoms(discParts);
+  return { tyre: tyre.toNonIndexed(), rim, disc };
 }
