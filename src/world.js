@@ -170,7 +170,7 @@ function buildRoads(roads, tex) {
   // across the approach lanes with straight / left-turn arrows behind it
   const MS = 0.5, MN = Math.ceil(EXT * 2 / MS), own = new Int16Array(MN * MN).fill(-1);
   // one id per street: OSM splits a street into many ways, and its own pieces must not read as a crossing road
-  const gid = new Map(); const streetId = r => { const k = r.name || ('#' + roads.indexOf(r)); if (!gid.has(k)) gid.set(k, gid.size); return gid.get(k); };
+  const gid = new Map(); const streetId = r => { const k = r.name ? r.name.replace(/ (East|West|North|South)$/, '') : ('#' + roads.indexOf(r)); if (!gid.has(k)) gid.set(k, gid.size); return gid.get(k); };
   roads.forEach(r0 => {
     if (!RW[r0.t]) return; const r = r0, id = streetId(r0); const h = r.w / 2 + 0.4;
     for (let i = 0; i < r.p.length - 1; i++) { const a = r.p[i], b = r.p[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
