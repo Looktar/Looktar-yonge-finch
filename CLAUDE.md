@@ -38,7 +38,9 @@ src/world.js       碰撞网格、道路、地面、路灯、信号灯、车、�
 src/street.js      人行道、斑马线、围栏、电线杆、高压塔、消防栓、站牌；nearestRoad()
 src/fx.js          粒子、黄昏天空 makeSky()、太阳 SUN、合成音效 Sfx
 src/zombie.js      Mixamo 骨骼角色加载/重定向/僵尸化/程序化姿态
-src/weapons.js     步枪/霰弹/手枪视图模型
+src/kit.js         零件库（照 Saltline）：倒角盒、旋转体、带孔挤出、管线；顶点 AO + 边缘磨损；按材质合并
+src/surf.js        程序贴图：噪声库 + 材质家族（阳极氧化、磷化钢、聚合物、橡胶、布料、油漆、混凝土），开局烘焙；kitMaterial() 三向投影 + 边缘磨损 + 雨珠
+src/weapons.js     步枪（零件库 162 件）/霰弹/手枪视图模型
 src/touch.js       手机触控
 src/index.html     菜单/HUD/触控层/CSS
 src/pbr.js         Poly Haven CC0 实景扫描贴图：地面（草/混凝土按铺装遮罩混合）、路面材质、墙面贴图数组
@@ -64,5 +66,7 @@ tests/e2e/smoke.mjs  Playwright 冒烟测试
 - 坐标：x = 东，z = 南；原点 lat0 = 43.78060、lon0 = -79.41550；路口 XING = (-3, 92)；出生点 START = (-6, 128)。
 - three r155 以后是物理光照单位：半球光/环境光约为旧版 π 倍。
 - 立面 shader：常量 varying 经透视插值不精确，hash 前先 `floor()` 量化。
+- **着色器代码（JS 模板字符串里）只能用 `/* */` 注释**，`//` 会吞掉拼接到同一行的代码（已经出过三次事故），单元测试会查。
+- 近景模型照 Saltline 的做法：用 `Kit` 零件清单 + `kitMaterial` 程序材质，不引入外部模型（D-14）。
 - 署名：OSM（ODbL）、多伦多 3D Massing 与 Street Tree（OGL-Toronto）、Mixamo。新增数据源要补署名。
 - 谷歌街景接口被权限拒绝，不要绕过；实景参考用 Wikimedia Commons。

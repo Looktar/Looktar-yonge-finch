@@ -66,7 +66,7 @@ function zombify(mat, uni) {
         vec3 dead = vec3(l*0.95, l*1.05, l*0.82) * vec3(0.8, 0.9, 0.72);
         c = mix(c, dead, skin * 0.9);
         c = mix(c, vec3(l) * vec3(0.92, 0.95, 0.9), 0.35);
-        vec3 sp = vZP * uNS + uSeed;  // ~15 cm blobs
+        vec3 sp = vZP * uNS + uSeed;  /* ~15 cm blobs */
         float grime = zn(sp * 1.0) * 0.7 + zn(sp * 4.0) * 0.3; float blood = smoothstep(0.66, 0.8, zn(sp * 0.6 + 7.0));
         float drip = smoothstep(0.7, 0.85, zn(vec3(sp.x * 2.0, sp.y * 0.25, sp.z * 2.0) + 3.0));
         c *= 0.62 + 0.38 * grime;

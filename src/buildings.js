@@ -213,12 +213,12 @@ export function facadeMaterial() {
       float gWall; vec3 gWNts;
       float h21(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
       float pI(float x, float lo, float hi){ return floor(x)*(hi-lo) + clamp(fract(x), lo, hi) - lo; }
-      // box-filtered pulse train: 1 inside [lo,hi] of every unit cell, exactly antialiased at any distance
+      /* box-filtered pulse train: 1 inside [lo,hi] of every unit cell, exactly antialiased at any distance */
       float pulse(float x, float lo, float hi, float w){ w = max(w, 1e-4); return (pI(x+0.5*w, lo, hi) - pI(x-0.5*w, lo, hi)) / w; }
       float gGlass; float gMtl; float gRgh; vec3 gEm; vec2 gCell; float gDet;`)
       .replace('#include <color_fragment>', `#include <color_fragment>
       {
-        int st = int(vInfo.y + 0.5); float seed = mod(floor(vInfo.x), 97.0) + 0.5; float flag = floor(vInfo.z + 0.5); float fh = max(vInfo.w, 1.0); // varyings of constants are not exact: quantise before hashing
+        int st = int(vInfo.y + 0.5); float seed = mod(floor(vInfo.x), 97.0) + 0.5; float flag = floor(vInfo.z + 0.5); float fh = max(vInfo.w, 1.0); /* varyings of constants are not exact: quantise before hashing */
         float front = mod(flag, 2.0); float blank = step(1.5, flag);
         vec2 F = vFac; vec2 dF = fwidth(F) + 1e-4;
         vec3 base = diffuseColor.rgb; vec3 alb = base; vec3 tint = vAcc;
@@ -226,7 +226,7 @@ export function facadeMaterial() {
         float win = 0.0; float litF = 0.22; vec3 lc = vec3(1.0, 0.66, 0.36); vec2 cell = vec2(0.0); float far = 0.0;
         float bw = 1.5; vec2 g, dg;
         float noise = h21(floor(F * vec2(0.9, 0.7)) + seed);
-        if (st <= 2) { // ---- houses ----
+        if (st <= 2) { /* ---- houses ---- */
           bw = 3.7; g = F / vec2(bw, fh); dg = dF / vec2(bw, fh); cell = floor(g);
           float has = step(0.32, h21(cell + seed)) * (1.0 - blank);
           float wx = pulse(g.x, 0.3, 0.7, dg.x), wy = pulse(g.y, 0.32, 0.8, dg.y);
@@ -243,34 +243,34 @@ export function facadeMaterial() {
           alb = mix(alb, vec3(0.36, 0.35, 0.33), 1.0 - step(0.5, F.y));
           alb = mix(alb, vec3(0.86, 0.86, 0.84), frame);
           tint = vec3(0.09, 0.1, 0.12); litF = 0.42;
-        } else if (st == 3 || st == 4 || st == 6 || st == 5 || st == 9 || st == 10) { // ---- towers & framed glass ----
+        } else if (st == 3 || st == 4 || st == 6 || st == 5 || st == 9 || st == 10) { /* ---- towers & framed glass ---- */
           bw = st == 6 ? 1.6 : st == 10 ? 1.25 : 1.5;
           g = F / vec2(bw, fh); dg = dF / vec2(bw, fh); cell = floor(g);
           float mull = pulse(g.x, 0.035, 0.965, dg.x);
-          if (st == 3) { // precast condo: piers every few bays, slab-edge bands, window walls
+          if (st == 3) { /* precast condo: piers every few bays, slab-edge bands, window walls */
             float per = 4.0 + floor(h21(vec2(seed, 1.0)) * 3.0);
             float pier = 1.0 - pulse(g.x / per, 0.0, 1.0 - 1.0 / per, dg.x / per);
             float band = pulse(g.y, 0.13, 1.0, dg.y);
             win = mull * band * (1.0 - pier);
             alb = base * (0.96 + 0.06 * noise);
             litF = 0.24;
-          } else if (st == 4) { // glass curtain wall: spandrel glass + vision glass
+          } else if (st == 4) { /* glass curtain wall: spandrel glass + vision glass */
             float vis = pulse(g.y, 0.2, 1.0, dg.y);
             win = mull; alb = base;
             tint = mix(tint * 0.55, tint, vis); litF = vis * 0.26;
             if (vis < 0.5) litF = 0.0;
-          } else if (st == 5 || st == 6) { // ribbon windows between solid bands (offices; NAC granite)
+          } else if (st == 5 || st == 6) { /* ribbon windows between solid bands (offices; NAC granite) */
             float rib = pulse(g.y, st == 6 ? 0.46 : 0.42, st == 6 ? 0.97 : 0.95, dg.y);
             win = rib * mull; alb = base * (0.95 + 0.08 * noise);
-            if (st == 6) { win = rib * pulse(g.x, 0.02, 0.98, dg.x); alb = mix(alb, vec3(0.09, 0.08, 0.07), rib); } // NAC: continuous bronze glass bands, slim dark-bronze mullions
+            if (st == 6) { win = rib * pulse(g.x, 0.02, 0.98, dg.x); alb = mix(alb, vec3(0.09, 0.08, 0.07), rib); } /* NAC: continuous bronze glass bands, slim dark-bronze mullions */
             if (st == 6) { float gr = h21(floor(F * vec2(1.6, 4.0)) + seed); alb = base * mix(0.9 + 0.2 * gr, 1.0, smoothstep(0.02, 0.08, dF.y)); }
             litF = st == 6 ? 0.16 : 0.3; lc = vec3(0.95, 0.93, 0.85);
-          } else if (st == 9) { // transit pavilion: glass walls under a fascia
+          } else if (st == 9) { /* transit pavilion: glass walls under a fascia */
             float wallTop = 3.4;
             win = mull * (1.0 - step(wallTop, F.y)) * pulse(F.y / 2.6, 0.12, 0.92, dF.y / 2.6);
             win = max(win, mull * step(F.y, wallTop) * step(2.55, F.y) * pulse(F.y, 2.62, 3.32, dF.y));
             alb = base; litF = 0.9; lc = vec3(0.9, 0.95, 1.0);
-          } else { // school / institutional brick with window strips
+          } else { /* school / institutional brick with window strips */
             float row = F.y / 0.077; float bx = F.x / 0.21 + mod(floor(row), 2.0) * 0.5;
             float brick = pulse(row, 0.0, 0.84, dF.y / 0.077) * pulse(bx, 0.0, 0.93, dF.x / 0.21);
             float fade = smoothstep(0.015, 0.05, max(dF.x, dF.y));
@@ -278,7 +278,7 @@ export function facadeMaterial() {
             win = mull * pulse(g.y, 0.3, 0.82, dg.y); litF = 0.15;
           }
           win *= step(0.5, 1.0 - blank);
-        } else if (st == 8) { // ---- brick apartments: punched windows & balcony doors ----
+        } else if (st == 8) { /* ---- brick apartments: punched windows & balcony doors ---- */
           bw = 3.1; g = F / vec2(bw, fh); dg = dF / vec2(bw, fh); cell = floor(g);
           float door = step(0.62, h21(vec2(cell.x, 3.0) + seed));
           float wx = pulse(g.x, door > 0.5 ? 0.18 : 0.22, door > 0.5 ? 0.82 : 0.78, dg.x);
@@ -289,42 +289,42 @@ export function facadeMaterial() {
           float fade = smoothstep(0.015, 0.05, max(dF.x, dF.y));
           alb = mix(vec3(0.48, 0.46, 0.43), base * (0.92 + 0.12 * noise), mix(brick, 0.86, fade));
           litF = 0.25;
-        } else if (st == 7) { // ---- strip retail: block / stucco upper wall ----
+        } else if (st == 7) { /* ---- strip retail: block / stucco upper wall ---- */
           alb = base * (0.94 + 0.08 * noise);
           float row = F.y / 0.2; float blk = pulse(row, 0.0, 0.94, dF.y / 0.2) * pulse(F.x / 0.4 + mod(floor(row), 2.0) * 0.5, 0.0, 0.97, dF.x / 0.4);
           alb *= mix(0.82, 1.0, mix(blk, 0.93, smoothstep(0.02, 0.06, dF.y)));
           if (front < 0.5) { float d = pulse(F.x / 14.0, 0.45, 0.52, dF.x / 14.0) * step(F.y, 2.2); alb = mix(alb, vec3(0.2, 0.22, 0.25), d); }
-          // second-floor offices over the shops (dentists, tutors, travel agents): a row of punched windows
+          /* second-floor offices over the shops (dentists, tutors, travel agents): a row of punched windows */
           bw = 3.2; g = vec2(F.x / bw, (F.y - 4.9) / 2.6); dg = dF / vec2(bw, 2.6); cell = floor(g);
           win = pulse(g.x, 0.18, 0.82, dg.x) * pulse(g.y, 0.08, 0.86, dg.y) * step(4.9, F.y) * step(F.y, 7.5) * (1.0 - blank); fh = 2.6; litF = 0.4;
-        } else if (st == 11) { // ---- rooftop mechanical penthouse: louvres ----
+        } else if (st == 11) { /* ---- rooftop mechanical penthouse: louvres ---- */
           float lv = pulse(F.y / 0.14, 0.0, 0.5, dF.y / 0.14) * step(0.5, F.y) * step(F.y, fh - 0.6);
           alb = base * (1.0 - 0.35 * lv);
-        } else if (st == 14) { // flat roof: membrane / gravel
+        } else if (st == 14) { /* flat roof: membrane / gravel */
           float pa = h21(floor(F / 3.0) + seed); alb = base * (0.82 + 0.25 * pa); rgh = 0.95;
-        } else if (st == 15) { // asphalt shingles: courses follow world height
+        } else if (st == 15) { /* asphalt shingles: courses follow world height */
           float row = F.y / 0.14; float tab = pulse(row, 0.0, 0.82, dF.y / 0.14);
           float fade = smoothstep(0.02, 0.07, dF.y);
           float tv = h21(vec2(floor(F.x / 0.33 + mod(floor(row), 2.0) * 0.5), floor(row)) + seed);
           alb = base * mix(mix(0.55, 0.85 + tv * 0.35, tab), 0.9, fade); rgh = 0.92;
-        } else if (st == 16) { // sloped glass crown
+        } else if (st == 16) { /* sloped glass crown */
           g = F / vec2(1.6, 1.9); dg = dF / vec2(1.6, 1.9); cell = floor(g);
           win = pulse(g.x, 0.05, 0.95, dg.x) * pulse(g.y, 0.06, 0.94, dg.y); alb = base * 0.6; litF = 0.0;
         } else if (st == 18) { alb = base * 0.92; rgh = 0.7; }
-        // photo-scanned wall material at real scale (detail only: divided by its mean so the building keeps its colour)
+        /* photo-scanned wall material at real scale (detail only: divided by its mean so the building keeps its colour) */
         int layer = (st == 0 || st == 8 || st == 10) ? ${L('brick')} : (st == 1 || st == 7) ? ${L('stucco')} : st == 6 ? ${L('granite')} : (st == 3 || st == 5 || st == 11 || st == 12 || st == 18) ? ${L('precast')} : -1;
         gWall = 0.0; gWNts = vec3(0.0, 0.0, 1.0);
         if (layer >= 0 && abs(vWN.y) < 0.5) {
           float tl = layer == ${L('brick')} ? ${T('brick')} : layer == ${L('stucco')} ? ${T('stucco')} : layer == ${L('granite')} ? ${T('granite')} : ${T('precast')};
           vec3 uvw = vec3(F.x / tl, -F.y / tl, float(layer));
-          vec3 tc = pow(texture(uWC, uvw).rgb, vec3(2.2)) / max(uWM[layer], vec3(0.02)); // array is stored raw (not sRGB)
+          vec3 tc = pow(texture(uWC, uvw).rgb, vec3(2.2)) / max(uWM[layer], vec3(0.02)); /* array is stored raw (not sRGB) */
           float k = layer == ${L('brick')} ? 1.0 : 0.85;
           vec3 wc = (layer == ${L('brick')} ? base : alb) * mix(vec3(1.0), tc, k);
           if (st <= 2) wc = mix(wc, vec3(0.36, 0.35, 0.33), 1.0 - step(0.5, F.y));
           alb = mix(wc, alb, step(0.5, win) );
           gWall = 1.0 - step(0.5, win); gWNts = texture(uWN, uvw).xyz * 2.0 - 1.0;
         }
-        // weathering: vertical rain streaks washing down from each floor line, grime splash at the base, patchy dirt
+        /* weathering: vertical rain streaks washing down from each floor line, grime splash at the base, patchy dirt */
         if (abs(vWN.y) < 0.5 && st != 9) {
           float sx = floor(F.x / 0.35); float streak = h21(vec2(sx, seed)) * (0.5 + 0.5 * sin(F.x * 7.3 + seed));
           float under = fract(F.y / max(fh, 2.5)); float drip = smoothstep(0.55, 0.0, under) * step(0.55, h21(vec2(sx, seed + 3.0)));
@@ -333,7 +333,7 @@ export function facadeMaterial() {
           float dirt = clamp(drip * streak * 0.32 + base * 0.38 + (patchy - 0.5) * 0.12, 0.0, 0.6) * (1.0 - smoothstep(0.35, 1.0, max(dF.x, dF.y) * 2.0));
           alb *= 1.0 - dirt * mix(1.0, 0.35, win);
         }
-        // ground-floor shops: storefront glazing, mullions, kick plate, backlit interiors
+        /* ground-floor shops: storefront glazing, mullions, kick plate, backlit interiors */
         float sfH = st == 7 ? 3.5 : 4.3;
         if (front > 0.5 && F.y < sfH && st != 9) {
           vec2 gs = F / vec2(2.2, 1.0); float m2 = pulse(gs.x, 0.025, 0.975, dF.x / 2.2);
@@ -342,11 +342,11 @@ export function facadeMaterial() {
           win = m2 * vy * tr; alb = vec3(0.07, 0.075, 0.08); cell = vec2(floor(F.x / 7.5), 77.0);
           tint = vec3(0.06, 0.07, 0.08); litF = 0.86; lc = mix(vec3(1.0, 0.82, 0.62), vec3(0.85, 0.93, 1.0), step(0.55, h21(cell + seed * 3.1)));
         } else if (st == 7 && F.y < sfH + 1.05 && front > 0.5) { alb = vec3(0.06, 0.065, 0.07); rgh = 0.5; }
-        // glass: a dielectric pane (fresnel reflection of the dusk sky) over an interior-mapped room
+        /* glass: a dielectric pane (fresnel reflection of the dusk sky) over an interior-mapped room */
         bool shop = front > 0.5 && F.y < sfH && st != 9;
         float hs = h21(cell + seed * 1.37); float hs2 = h21(cell.yx * 1.91 + seed * 0.37);
         float lit = step(1.0 - litF, hs);
-        if (!shop) lc = mix(lc, vec3(0.82, 0.88, 1.0), step(0.78, hs2)); // some rooms lit by cool LED / TV light
+        if (!shop) lc = mix(lc, vec3(0.82, 0.88, 1.0), step(0.78, hs2)); /* some rooms lit by cool LED / TV light */
         float detail = shop ? smoothstep(0.35, 1.0, max(dF.x, dF.y) / 2.0) : smoothstep(0.35, 1.0, max(dg.x, dg.y));
         float tinted = (st == 4 || st == 6 || st == 5 || st == 16) ? 1.0 : 0.0;
         vec3 room = vec3(0.0);
@@ -364,15 +364,15 @@ export function facadeMaterial() {
           vec3 wallc = mix(vec3(0.72, 0.66, 0.56), vec3(0.86, 0.86, 0.83), rr);
           if (shop) wallc = mix(vec3(0.78, 0.74, 0.68), vec3(0.5, 0.52, 0.55), r2);
           vec3 c;
-          if (t == tt.z) { // back wall with a piece of furniture / shelving
+          if (t == tt.z) { /* back wall with a piece of furniture / shelving */
             c = wallc * 0.92;
             float fur = step(hp.y, (shop ? 2.0 : 0.85) + 0.5 * rr) * step(0.12 * cs.x, hp.x) * step(hp.x, (0.5 + 0.35 * r2) * cs.x);
             c = mix(c, shop ? mix(vec3(0.75, 0.3, 0.2), vec3(0.2, 0.35, 0.6), r2) : vec3(0.28, 0.22, 0.18), fur);
           }
           else if (t == tt.x) c = wallc * 0.78;
-          else if (d.y < 0.0) c = shop ? mix(vec3(0.32, 0.3, 0.28), vec3(0.45, 0.36, 0.28), r2) : mix(vec3(0.34, 0.25, 0.18), vec3(0.5, 0.48, 0.45), rr); // floor
-          else { c = vec3(0.7); if (shop) { vec2 pq = abs(fract(hp.xz / vec2(2.4, 2.4)) - 0.5); c = mix(vec3(0.55), vec3(3.0), step(pq.x, 0.12) * step(pq.y, 0.3)); } } // ceiling (shops: light panels)
-          if (shop && t != tt.y) { // shelving / counters along the walls, and a row of display units mid-floor
+          else if (d.y < 0.0) c = shop ? mix(vec3(0.32, 0.3, 0.28), vec3(0.45, 0.36, 0.28), r2) : mix(vec3(0.34, 0.25, 0.18), vec3(0.5, 0.48, 0.45), rr); /* floor */
+          else { c = vec3(0.7); if (shop) { vec2 pq = abs(fract(hp.xz / vec2(2.4, 2.4)) - 0.5); c = mix(vec3(0.55), vec3(3.0), step(pq.x, 0.12) * step(pq.y, 0.3)); } } /* ceiling (shops: light panels) */
+          if (shop && t != tt.y) { /* shelving / counters along the walls, and a row of display units mid-floor */
             float sh = step(hp.y, 1.9) * (1.0 - step(0.42, fract(hp.y / 0.45)) * 0.7);
             float mid = step(abs(hp.z - D * 0.45), 0.5) * step(hp.y, 1.3);
             c = mix(c, mix(vec3(0.85, 0.82, 0.76), mix(vec3(0.7, 0.2, 0.15), vec3(0.15, 0.4, 0.6), r2), 0.5) * (0.6 + 0.4 * fract(hp.x * 1.7 + r2 * 9.0)), max(sh * step(D * 0.6, hp.z), mid));
@@ -380,14 +380,14 @@ export function facadeMaterial() {
           float depth = clamp(hp.z / D, 0.0, 1.0);
           float lamp = lit * (1.0 - 0.6 * depth) * ((t == tt.y && d.y > 0.0) ? 1.5 : 1.0);
           room = c * lc * (lamp + 0.012);
-          if (!shop) { // blinds and curtains part-way down some windows
+          if (!shop) { /* blinds and curtains part-way down some windows */
             float bl = step(0.5, r2) * step(1.0 - (0.15 + 0.7 * h21(cell + seed * 5.3)), lp.y / cs.y);
             room = mix(room, mix(vec3(0.86, 0.84, 0.78), vec3(0.62, 0.55, 0.46), rr) * lc * (lit * 0.75 + 0.012), bl);
           }
         }
         room = mix(room, lc * litF * 0.45, detail);
         vec3 trans = mix(vec3(0.92), tint * 3.0 + 0.04, tinted * 0.85);
-        alb = mix(alb, tint * mix(0.12, 1.25, tinted * (st == 6 ? 1.0 : 0.6)), win); // reflective coatings: the metal colour tints the reflection
+        alb = mix(alb, tint * mix(0.12, 1.25, tinted * (st == 6 ? 1.0 : 0.6)), win); /* reflective coatings: the metal colour tints the reflection */
         rgh = mix(rgh, 0.03 + 0.04 * hs2 * (1.0 - detail), win);
         mtl = mix(mtl, tinted * (st == 6 ? 0.85 : 0.55), win);
         em = win * room * trans * (shop ? 0.42 : st == 5 || st == 6 ? 0.22 : 0.85);

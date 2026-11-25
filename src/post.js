@@ -28,29 +28,29 @@ export function makeFinalPass() {
       vec3 grade(vec3 c){ c = pow(max(c, 0.0), vec3(uPow)); float l = lum(c); c = mix(vec3(l), c, uSat); c *= mix(vec3(0.92, 0.98, 1.06), vec3(1.05, 1.0, 0.92), smoothstep(0.1, 0.7, l)); return max(c, 0.0); }
       vec3 shade(vec2 uv){
         vec2 d = uv - 0.5; float r = length(d);
-        // chromatic aberration grows towards the edges
+        /* chromatic aberration grows towards the edges */
         vec2 ca = d * uCA * (1.0 + 3.0 * r);
         vec3 c = vec3(hdr(uv + ca).r, hdr(uv).g, hdr(uv - ca).b);
         return c;
       }
       void main(){
         vec2 uv = vUv; vec3 c = shade(uv); c = vec3(fin(c.r), fin(c.g), fin(c.b));
-        // sun shafts: march toward the sun, gathering only the very bright sky
+        /* sun shafts: march toward the sun, gathering only the very bright sky */
         if (uSun.z > 0.001 && uShafts > 0.0) {
           vec2 dv = (uSun.xy - uv) / 18.0; vec2 p = uv; float acc = 0.0, w = 1.0;
           for (int i = 0; i < 18; i++) { p += dv; float b = max(lum(hdr(p)) - 1.6, 0.0); acc += min(b, 6.0) * w; w *= 0.93; }
           float fall = 1.0 - smoothstep(0.0, 0.9, length((uv - uSun.xy) * vec2(uTexel.y / uTexel.x, 1.0)));
           c += uSunCol * acc / 18.0 * uShafts * uSun.z * (0.35 + 0.65 * fall);
         }
-        // anamorphic streak on highlights (lamps, signal heads, sun)
+        /* anamorphic streak on highlights (lamps, signal heads, sun) */
         if (uStreak > 0.0) {
           vec3 st = vec3(0.0);
           for (int i = -12; i <= 12; i++) { if (i == 0) continue; float o = float(i) * 0.0045 * (1.0 + 0.35 * fract(sin(dot(uv, vec2(91.3, 47.1))) * 4375.5)); vec3 s = hdr(uv + vec2(o, 0.0)); st += max(s - 2.5, 0.0) * pow(1.0 - abs(float(i)) / 13.0, 2.0); } st /= 6.0;
           c += st * vec3(0.55, 0.7, 1.0) * uStreak;
         }
-        // tone map (exposure is applied by the chunk via toneMappingExposure), then the look
+        /* tone map (exposure is applied by the chunk via toneMappingExposure), then the look */
         vec3 t = tone(c);
-        // unsharp mask on the tone-mapped neighbours
+        /* unsharp mask on the tone-mapped neighbours */
         vec3 nb = tone((hdr(uv + vec2(uTexel.x, 0.0)) + hdr(uv - vec2(uTexel.x, 0.0)) + hdr(uv + vec2(0.0, uTexel.y)) + hdr(uv - vec2(0.0, uTexel.y))) * 0.25);
         t = max(t + (t - nb) * uSharpen, 0.0);
         t = grade(t);
