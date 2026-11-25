@@ -24,7 +24,7 @@ let failed = 0;
 for (const c of CASES) {
   const errors = [], t0 = Date.now();
   const ctx = await browser.newContext(c.ctx), p = await ctx.newPage(); p.setDefaultTimeout(300000);
-  p.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 300)); });
+  p.on('console', m => { if (m.type() === 'error' || /self-test failed/.test(m.text())) errors.push('console: ' + m.text().slice(0, 300)); });
   p.on('pageerror', e => errors.push('pageerror: ' + e.message));
   await p.addInitScript(() => { const raf = window.requestAnimationFrame.bind(window); window.__hold = false; window.requestAnimationFrame = cb => window.__hold ? 0 : raf(cb); });
   try {

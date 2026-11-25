@@ -31,6 +31,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+let envOk = true;
 const CHUNK0 = { fpv: THREE.ShaderChunk.fog_pars_vertex, fv: THREE.ShaderChunk.fog_vertex, fpf: THREE.ShaderChunk.fog_pars_fragment, ff: THREE.ShaderChunk.fog_fragment, op: THREE.ShaderChunk.opaque_fragment }; // stock chunks, for #diag
 // dusk aerial perspective: fog turns warm toward the setting sun, cooler overhead
 THREE.ShaderChunk.fog_pars_vertex = '#ifdef USE_FOG\n varying float vFogDepth; varying vec3 vFogView;\n#endif';
@@ -93,6 +94,16 @@ scene.add(mirror);
   const r = rng(5); const bg = new THREE.BoxGeometry(1, 1, 1);
   for (let i = 0; i < 26; i++) { const a = r() * Math.PI * 2, d = 45 + r() * 25, h = 4 + r() * 10; const m = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.16 + r() * 0.12, 0.15 + r() * 0.1, 0.15 + r() * 0.1) })); m.position.set(Math.cos(a) * d, h / 2 - 3, Math.sin(a) * d); m.scale.set(8 + r() * 10, h, 8 + r() * 10); m.lookAt(0, m.position.y, 0); es.add(m); }
   const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(es, 0.015, 0.1, 400).texture; scene.environmentIntensity = 0.7;
+  // self-test: a chrome ball lit only by the environment must not come out black. Some GPUs (Apple) have produced
+  // NaN texels in the map, which turns every PBR surface black; drop the map rather than ship a black city
+  const ts = new THREE.Scene(); ts.environment = scene.environment;
+  ts.add(new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 0.45 })));
+  const tc = new THREE.PerspectiveCamera(30, 1, 0.1, 10); tc.position.set(0, 0, 4.2);
+  const trt = new THREE.WebGLRenderTarget(16, 16, { type: THREE.UnsignedByteType }), tp = new Uint8Array(16 * 16 * 4);
+  renderer.setRenderTarget(trt); renderer.setClearColor(0xffffff, 1); renderer.clear(); renderer.render(ts, tc); renderer.readRenderTargetPixels(trt, 0, 0, 16, 16, tp); renderer.setRenderTarget(null); renderer.setClearColor(0x000000, 1);
+  let black = 0, n = 0; for (let y = 5; y < 11; y++) for (let x = 5; x < 11; x++) { const i = (y * 16 + x) * 4; n++; if (tp[i] + tp[i + 1] + tp[i + 2] < 3) black++; }
+  trt.dispose(); envOk = black / n < 0.1;
+  if (!envOk) { console.warn('environment map self-test failed (' + black + '/' + n + ' black), environment lighting off'); scene.environment = null; }
 }
 
 const hemi = new THREE.HemisphereLight(0x9aa8bd, 0x3a3631, 2.0); scene.add(hemi);
@@ -628,7 +639,7 @@ if (HS === 'debug' || HS === 'diag' || QS.has('debug')) {
     ['touchstart', 'pointerdown', 'mousedown'].forEach(ev => all.addEventListener(ev, e => e.stopPropagation()));
     all.onclick = e => { e.stopPropagation(); box.querySelectorAll('button').forEach(bt => { if (bt !== all && /开$/.test(bt.textContent)) bt.click(); }); }; box.appendChild(all); }
   const live = document.createElement('div'); live.style.cssText = 'font:12px monospace;color:#9fd'; box.insertBefore(live, list);
-  setInterval(() => { live.textContent = '曝光 ' + finalPass.uniforms.toneMappingExposure.value.toFixed(2) + ' | 平均亮度 ' + (finalPass.avg || 0).toFixed(3) + ' | AO ' + (aoPass.enabled ? '开' : '关') + ' | 像素比 ' + renderer.getPixelRatio().toFixed(2) + ' | ' + renderer.info.render.calls + ' 次绘制'; }, 500);
+  setInterval(() => { live.textContent = '曝光 ' + finalPass.uniforms.toneMappingExposure.value.toFixed(2) + ' | 平均亮度 ' + (finalPass.avg || 0).toFixed(3) + ' | 环境图 ' + (envOk ? '正常' : '自检失败已关') + ' | AO ' + (aoPass.enabled ? '开' : '关') + ' | 像素比 ' + renderer.getPixelRatio().toFixed(2) + ' | ' + renderer.info.render.calls + ' 次绘制'; }, 500);
   document.body.appendChild(box);
   // #diag: render the scene under a dozen variants into a small 8-bit target and report the brightness of each,
   // so one screenshot from a device shows which stage goes dark
