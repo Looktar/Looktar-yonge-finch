@@ -122,3 +122,30 @@ export function ensureKit(root) {
   root.traverse(o => { const g = o.geometry; if (!o.isMesh || !g || g.attributes.kit) return; const n = g.attributes.position.count, k = new Float32Array(n * 2); for (let i = 0; i < n; i++) k[i * 2] = 1; g.setAttribute('kit', new THREE.BufferAttribute(k, 2)); });
   return root;
 }
+
+// loft: sweep an ellipse along a path (parallel-transport frames), with rounded end caps. path [[x,y,z]...],
+// radii: [rx, ry] per point (rx along the frame normal, ry along the binormal) or a single [rx, ry]; up hint for the
+// first frame. Saltline builds its hands this way.
+export function loft(path, radii, seg = 12, { up = [0, 1, 0], caps = true } = {}) {
+  const P = path.map(p => new THREE.Vector3(...p)), n = P.length, R = i => Array.isArray(radii[0]) ? radii[i] : radii;
+  const T = P.map((p, i) => new THREE.Vector3().subVectors(P[Math.min(i + 1, n - 1)], P[Math.max(i - 1, 0)]).normalize());
+  let N = new THREE.Vector3(...up); if (Math.abs(N.dot(T[0])) > 0.95) N.set(1, 0, 0); N.sub(T[0].clone().multiplyScalar(N.dot(T[0]))).normalize();
+  const pos = [], idx = [];
+  const ring = (c, t, nn, rx, ry) => { const b = new THREE.Vector3().crossVectors(t, nn); for (let k = 0; k < seg; k++) { const a = k / seg * Math.PI * 2; pos.push(c.x + nn.x * Math.cos(a) * rx + b.x * Math.sin(a) * ry, c.y + nn.y * Math.cos(a) * rx + b.y * Math.sin(a) * ry, c.z + nn.z * Math.cos(a) * rx + b.z * Math.sin(a) * ry); } };
+  const frames = [];
+  for (let i = 0; i < n; i++) { if (i > 0) N.sub(T[i].clone().multiplyScalar(N.dot(T[i]))).normalize(); frames.push(N.clone()); }
+  // end caps: two shrinking rings and a tip, so ends are domes instead of flat discs
+  const rings = [];
+  if (caps) { const [rx, ry] = R(0), r = Math.min(rx, ry); rings.push([P[0].clone().addScaledVector(T[0], -r * 0.55), T[0], frames[0], rx * 0.6, ry * 0.6]); }
+  for (let i = 0; i < n; i++) { const [rx, ry] = R(i); rings.push([P[i], T[i], frames[i], rx, ry]); }
+  if (caps) { const [rx, ry] = R(n - 1), r = Math.min(rx, ry); rings.push([P[n - 1].clone().addScaledVector(T[n - 1], r * 0.55), T[n - 1], frames[n - 1], rx * 0.6, ry * 0.6]); }
+  for (const r of rings) ring(...r);
+  const NR = rings.length;
+  for (let j = 0; j < NR - 1; j++) for (let k = 0; k < seg; k++) { const a = j * seg + k, b = j * seg + (k + 1) % seg, c = a + seg, d = b + seg; idx.push(a, b, c, b, d, c); }
+  if (caps) { // tips
+    const t0 = pos.length / 3; const s = P[0].clone().addScaledVector(T[0], -Math.min(...R(0)) * 0.95); pos.push(s.x, s.y, s.z);
+    const t1 = t0 + 1; const e = P[n - 1].clone().addScaledVector(T[n - 1], Math.min(...R(n - 1)) * 0.95); pos.push(e.x, e.y, e.z);
+    for (let k = 0; k < seg; k++) { idx.push(t0, (k + 1) % seg, k); const o = (NR - 1) * seg; idx.push(t1, o + k, o + (k + 1) % seg); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g;
+}

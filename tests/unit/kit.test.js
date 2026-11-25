@@ -51,3 +51,13 @@ describe('edge marks', () => {
     expect(flat).toBeGreaterThan(0); expect(flatMarked).toBe(0); expect(bev).toBeGreaterThan(0);
   });
 });
+import { loft } from '../../src/kit.js';
+describe('loft', () => {
+  it('a straight loft is a closed tube whose faces point outward', () => {
+    const g = loft([[0, 0, 0], [0, 0.05, 0], [0, 0.1, 0]], [0.01, 0.01], 12).toNonIndexed();
+    const p = g.attributes.position.array; let bad = 0;
+    for (let i = 0; i < p.length; i += 9) { const a = new THREE.Vector3(p[i], p[i + 1], p[i + 2]), b = new THREE.Vector3(p[i + 3], p[i + 4], p[i + 5]), d = new THREE.Vector3(p[i + 6], p[i + 7], p[i + 8]); const n = new THREE.Vector3().crossVectors(b.clone().sub(a), d.clone().sub(a)); const m = a.clone().add(b).add(d).divideScalar(3); m.y -= 0.05; if (n.dot(m) <= 0) bad++; }
+    expect(bad).toBe(0);
+    g.computeBoundingBox(); expect(g.boundingBox.max.y).toBeGreaterThan(0.105); expect(g.boundingBox.max.x).toBeCloseTo(0.01, 3);
+  });
+});
