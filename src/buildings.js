@@ -42,6 +42,13 @@ const TAGS = [
 // shop signs at their real addresses
 const NAMED_SIGNS = [[-36, 189, 0], [50, 217, 1], [54, 175, 2], [0, -24, 3], [-21, -159, 4], [49, -36, 5], [20, -157, 4]];
 
+// the facade shader's h21 (Dave Hoskins' hash), mirrored in JS so geometry can line up with painted features
+function h21js(x, y) {
+  const f = v => v - Math.floor(v), F = Math.fround;
+  let a = f(F(x * 0.1031)), b = f(F(y * 0.1031)), c = f(F(x * 0.1031));
+  const d = a * (b + 33.33) + b * (c + 33.33) + c * (a + 33.33); a += d; b += d; c += d;
+  return f((a + b) * c);
+}
 export function parseBuildings() {
   const list = []; const hm = HM.split(';');
   B.split('\n').forEach((line, i) => {
@@ -527,6 +534,25 @@ export function buildCity(roads, col) {
           gb.face([[ax, y, az, e.u0, y], [qx, y, qz, e.u0 + e.L, y], [qx, y + t, qz, e.u0 + e.L, y + t], [ax, y + t, az, e.u0, y + t]], [e.nx, 0, e.nz], pinf, sc, white);
           gb.face([[e.a[0], y + t, e.a[1], 0, 0], [e.q[0], y + t, e.q[1], 0, 0], [qx, y + t, qz, 0, 0], [ax, y + t, az, 0, 0]], [0, 1, 0], pinf, sc, white);
           gb.face([[e.a[0], y, e.a[1], 0, 0], [ax, y, az, 0, 0], [qx, y, qz, 0, 0], [e.q[0], y, e.q[1], 0, 0]], [0, -1, 0], pinf, sc, white);
+        }
+      }
+    }
+    // precast condo piers: the shader paints a solid pier every `per` bays (same hash as h21(vec2(seed, 1)) in the
+    // facade shader); stand a real 28 cm concrete pier there, full height, so the facade has relief and casts shadow
+    if (b.st === ST.CONDO && H - y0 > 18 && Math.hypot(b.c[0] - 0, b.c[1] - 60) < 400) {
+      const per = 4 + Math.floor(h21js(seed, 1) * 3), bw = 1.5, d = 0.28; const pc = b.wall.clone().multiplyScalar(1.04); const pinf = [seed, ST.PAR, 0, 1];
+      const ybot = Math.max(y0, 4.5);
+      for (const e of edges) {
+        if (!e || e.L < 4) continue;
+        const c0 = Math.ceil(e.u0 / bw), c1 = Math.floor((e.u0 + e.L) / bw);
+        for (let ci = c0; ci < c1; ci++) {
+          if (((ci % per) + per) % per !== per - 1) continue;
+          const s0 = ci * bw - e.u0 + 0.06, s1 = (ci + 1) * bw - e.u0 - 0.06; if (s0 < 0.2 || s1 > e.L - 0.2) continue;
+          const A = [e.a[0] + e.tx * s0, e.a[1] + e.tz * s0], Q = [e.a[0] + e.tx * s1, e.a[1] + e.tz * s1];
+          const Ao = [A[0] + e.nx * d, A[1] + e.nz * d], Qo = [Q[0] + e.nx * d, Q[1] + e.nz * d];
+          gb.face([[Ao[0], ybot, Ao[1], e.u0 + s0, ybot], [Qo[0], ybot, Qo[1], e.u0 + s1, ybot], [Qo[0], H, Qo[1], e.u0 + s1, H], [Ao[0], H, Ao[1], e.u0 + s0, H]], [e.nx, 0, e.nz], pinf, pc, white);
+          gb.face([[A[0], ybot, A[1], 0, ybot], [Ao[0], ybot, Ao[1], d, ybot], [Ao[0], H, Ao[1], d, H], [A[0], H, A[1], 0, H]], [-e.tx, 0, -e.tz], pinf, pc.clone().multiplyScalar(0.9), white);
+          gb.face([[Q[0], ybot, Q[1], 0, ybot], [Q[0], H, Q[1], 0, H], [Qo[0], H, Qo[1], d, H], [Qo[0], ybot, Qo[1], d, ybot]], [e.tx, 0, e.tz], pinf, pc.clone().multiplyScalar(0.9), white);
         }
       }
     }
