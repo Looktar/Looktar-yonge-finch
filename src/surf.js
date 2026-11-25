@@ -138,7 +138,8 @@ export function kitMaterial(fam, opts = {}) {
         vec3 on = normalize(vOn) + sNrm * (sTw.x * vec3(0.0, nx.y, nx.x) + sTw.y * vec3(ny.x, 0.0, ny.y) + sTw.z * vec3(nz.x, nz.y, 0.0));
         normal = normalize(vNM * on) * faceDirection; }` + (o.drops ? `
       { vec3 q = vOp * ${o.drops.toFixed(1)}; vec3 c = floor(q); vec3 f = fract(q) - 0.5; float hh = dh(c); vec3 of = vec3(dh(c + 1.3), dh(c + 2.7), dh(c + 4.1)) - 0.5;
-        vec3 d = f - of * 0.5; float r = 0.12 + 0.2 * dh(c + 7.7); float dr = step(0.66, hh) * (1.0 - smoothstep(r * 0.7, r, length(d)));
+        vec3 d = f - of * 0.5; float r = 0.12 + 0.2 * dh(c + 7.7); float dr = step(0.55, hh) * (1.0 - smoothstep(r * 0.7, r, length(d)));
+        float film = smoothstep(0.3, 0.9, normalize(vOn).y) * 0.35; roughnessFactor = mix(roughnessFactor, 0.3, film); diffuseColor.rgb *= 1.0 - 0.2 * film; /* water film on up-facing surfaces */
         roughnessFactor = mix(roughnessFactor, 0.05, dr); metalnessFactor = mix(metalnessFactor, 0.0, dr); diffuseColor.rgb *= 1.0 - 0.3 * dr; normal = normalize(normal + vNM * (d / max(r, 1e-3)) * dr * 0.9); }` : ''));
   };
   m.customProgramCacheKey = () => 'kit-' + fam + '-' + o.drops + (o.ground ? 'g' : '');

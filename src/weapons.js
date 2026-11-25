@@ -127,7 +127,7 @@ function kmats() {
     anod: kitMaterial('anod', { scale: 9, wear: 0.9, normal: 0.15, wearColor: 0x7d8186, drops: 150, envMapIntensity: 1.2 }),
     park: kitMaterial('park', { scale: 11, wear: 0.7, normal: 0.2, wearColor: 0x6f7173, drops: 150, envMapIntensity: 1.3 }),
     fde: kitMaterial('poly', { color: 0x7a6748, scale: 10, normal: 0.45, wear: 0.5, wearColor: 0x9c8a68, wearRough: 0.55, wearMetal: 0, drops: 150 }),
-    blk: kitMaterial('poly', { color: 0x2a2a2b, scale: 10, normal: 0.5, wear: 0.4, wearColor: 0x454546, wearRough: 0.55, wearMetal: 0 }),
+    blk: kitMaterial('poly', { color: 0x2a2a2b, scale: 10, normal: 0.5, wear: 0.4, wearColor: 0x454546, wearRough: 0.55, wearMetal: 0, drops: 150 }),
     rub: kitMaterial('rubber', { scale: 10, wear: 0 }),
     hole: new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.9, metalness: 0 }), // fake recesses
     glove: kitMaterial('cloth', { color: 0x24251f, scale: 14, wear: 0, normal: 0.8 }),

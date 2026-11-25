@@ -98,7 +98,7 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
 // glass, droplets) can exceed that on real GPUs, and bloom then smears Inf/NaN over the whole frame
 THREE.ShaderChunk.opaque_fragment = 'outgoingLight = clamp(outgoingLight, vec3(0.0), vec3(3e4));\n' + THREE.ShaderChunk.opaque_fragment;
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x7f8386, 0.0011);
+scene.fog = new THREE.FogExp2(0x7f8386, 0.0009);
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 700);
 camera.rotation.order = 'YXZ'; scene.add(camera);
 const sky = makeSky(); scene.add(sky);
@@ -129,7 +129,7 @@ scene.add(mirror);
   const gnd = new THREE.Mesh(new THREE.CircleGeometry(80, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x4a4542 })); gnd.position.y = -3; es.add(gnd);
   const r = rng(5); const bg = new THREE.BoxGeometry(1, 1, 1);
   for (let i = 0; i < 26; i++) { const a = r() * Math.PI * 2, d = 45 + r() * 25, h = 4 + r() * 10; const m = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.16 + r() * 0.12, 0.15 + r() * 0.1, 0.15 + r() * 0.1) })); m.position.set(Math.cos(a) * d, h / 2 - 3, Math.sin(a) * d); m.scale.set(8 + r() * 10, h, 8 + r() * 10); m.lookAt(0, m.position.y, 0); es.add(m); }
-  const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(es, 0.015, 0.1, 400).texture; scene.environmentIntensity = 0.6;
+  const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(es, 0.015, 0.1, 400).texture; scene.environmentIntensity = 0.48;
   // self-test: a chrome ball lit only by the environment must not come out black. Some GPUs (Apple) have produced
   // NaN texels in the map, which turns every PBR surface black; drop the map rather than ship a black city
   const ts = new THREE.Scene(); ts.environment = scene.environment;
@@ -142,9 +142,9 @@ scene.add(mirror);
   if (!envOk) { console.warn('environment map self-test failed (' + black + '/' + n + ' black), environment lighting off'); scene.environment = null; }
 }
 
-const hemi = new THREE.HemisphereLight(0x93a3bc, 0x35302b, 1.55); scene.add(hemi);
+const hemi = new THREE.HemisphereLight(0x93a3bc, 0x35302b, 1.2); /* lower fill, stronger sun than before: more contrast without crushing the shade */ scene.add(hemi);
 // low sun in the WSW, as at a late-November sunset over Yonge & Finch
-const sun = new THREE.DirectionalLight(0xffb070, 8.2); scene.add(sun); scene.add(sun.target);
+const sun = new THREE.DirectionalLight(0xffb070, 9.3); scene.add(sun); scene.add(sun.target);
 sun.castShadow = Q.shadow > 0; sun.shadow.mapSize.set(Q.shadow || 1024, Q.shadow || 1024);
 { const c = sun.shadow.camera; c.left = -130; c.right = 130; c.top = 70; c.bottom = -70; c.near = 1; c.far = 1200; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.06; }
 function placeSun(x, z) { // follow the player, snapped to shadow texels to avoid shimmering
@@ -172,7 +172,7 @@ const vmCam = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.01, 10
 const vmRoot = new THREE.Group(); vmCam.add(vmRoot);
 const vmHemi = new THREE.HemisphereLight(0xaab6c8, 0x3a3029, 1.3); vmScene.add(vmHemi);
 const vmKey = new THREE.DirectionalLight(0xffb27a, 2.3); vmScene.add(vmKey);
-const vmRim = new THREE.DirectionalLight(0x9fb8ff, 1.9); vmRim.position.set(-1.5, 0.5, -1); vmScene.add(vmRim);
+const vmRim = new THREE.DirectionalLight(0x9fb8ff, 2.1); vmRim.position.set(-1.5, 0.5, -1); vmScene.add(vmRim);
 const vmMuzzle = new THREE.PointLight(0xffb060, 0, 2.5, 2); vmScene.add(vmMuzzle);
 
 // ---------- post ----------
