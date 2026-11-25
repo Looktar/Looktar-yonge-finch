@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
-// Rigged characters: Soldier.glb and Michelle.glb from the three.js examples (Mixamo rigs).
+// Rigged character: Soldier.glb from the three.js examples (Mixamo rig). Michelle was dropped in v0.6.0 (cartoon look).
 // Both use the same mixamorig skeleton, so the soldier's Walk/Run/Idle clips drive both.
 const B = n => 'mixamorig' + n;
 
@@ -23,7 +23,7 @@ export async function loadZombieAssets(onProgress) {
     const bo = 20 + jl; dv.setUint32(bo, bl, true); dv.setUint32(bo + 4, 0x004E4942, true); glb.set(bin, bo + 8);
     return new Promise((res, rej) => loader.parse(glb.buffer, '', res, rej));
   };
-  const [sol, mic] = await Promise.all([load('Soldier.json'), load('Michelle.json')]);
+  const sol = await load('Soldier.json'); // Michelle (a cartoon dancer) no longer used: one realistic rig, varied per zombie
   const clips = {};
   for (const c of sol.animations) clips[c.name] = c;
   const strip = (clip, keepY) => {
@@ -37,16 +37,15 @@ export async function loadZombieAssets(onProgress) {
   };
   // put both rigs in their T-pose so rest orientations line up
   const tpose = gltf => { const c = gltf.animations.find(a => a.name === 'TPose'); if (!c) return; const mx = new THREE.AnimationMixer(gltf.scene); mx.clipAction(c).play(); mx.update(0); gltf.scene.updateMatrixWorld(true); mx.stopAllAction(); };
-  tpose(sol); tpose(mic);
+  tpose(sol);
   const prep = (gltf, height, cl) => {
     const scene = gltf.scene; scene.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(scene); const h = box.max.y - box.min.y;
     return { scene, scale: height / h, clips: cl };
   };
   const solClips = { walk: strip(clips.Walk, true), run: strip(clips.Run, true), idle: strip(clips.Idle, true) };
-  const micClips = { walk: retarget(sol.scene, mic.scene, strip(clips.Walk, false)), run: retarget(sol.scene, mic.scene, strip(clips.Run, false)), idle: retarget(sol.scene, mic.scene, strip(clips.Idle, false)) };
-  tpose(sol); tpose(mic);
-  return { soldier: prep(sol, 1.8, solClips), woman: prep(mic, 1.68, micClips) };
+  tpose(sol);
+  return { soldier: prep(sol, 1.8, solClips) };
 }
 
 function zombify(mat, uni) {
@@ -55,7 +54,7 @@ function zombify(mat, uni) {
     sh.uniforms.uFlash = uni.uFlash; sh.uniforms.uSeed = uni.uSeed; sh.uniforms.uTint = uni.uTint; sh.uniforms.uNS = uni.uNS;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vZP;').replace('#include <skinning_vertex>', '#include <skinning_vertex>\nvZP = transformed;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-      varying vec3 vZP; uniform float uFlash; uniform float uSeed; uniform vec3 uTint; uniform float uNS;
+      varying vec3 vZP; uniform float uFlash; uniform float uSeed; uniform vec3 uTint; uniform float uNS; float zBlood;
       float zh(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719)))*43758.5453); }
       float zn(vec3 p){ vec3 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
         return mix(mix(mix(zh(i),zh(i+vec3(1,0,0)),f.x),mix(zh(i+vec3(0,1,0)),zh(i+vec3(1,1,0)),f.x),f.y),
@@ -67,42 +66,18 @@ function zombify(mat, uni) {
         c = mix(c, dead, skin * 0.9);
         c = mix(c, vec3(l) * vec3(0.92, 0.95, 0.9), 0.35);
         vec3 sp = vZP * uNS + uSeed;  /* ~15 cm blobs */
-        float grime = zn(sp * 1.0) * 0.7 + zn(sp * 4.0) * 0.3; float blood = smoothstep(0.66, 0.8, zn(sp * 0.6 + 7.0));
-        float drip = smoothstep(0.7, 0.85, zn(vec3(sp.x * 2.0, sp.y * 0.25, sp.z * 2.0) + 3.0));
-        c *= 0.62 + 0.38 * grime;
-        c = mix(c, vec3(0.16, 0.012, 0.01), max(blood, drip * 0.8) * 0.9);
+        float grime = zn(sp * 1.0) * 0.7 + zn(sp * 4.0) * 0.3; float blood = smoothstep(0.72, 0.86, zn(sp * 0.6 + 7.0));
+        float drip = smoothstep(0.76, 0.9, zn(vec3(sp.x * 2.0, sp.y * 0.25, sp.z * 2.0) + 3.0)); zBlood = max(blood, drip * 0.8);
+        c *= (0.42 + 0.4 * grime) * 0.8; /* filthy, sun-faded: the bare white armour read as clean plastic */
+        c = mix(c, vec3(0.05, 0.008, 0.006), zBlood * 0.85); /* dried, dark blood */
         c *= uTint; c = mix(c, vec3(0.9, 0.85, 0.85), uFlash);
         diffuseColor.rgb = c; }`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = max(roughnessFactor, 0.55);');
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(max(roughnessFactor, 0.6), 0.35, zBlood);');
   };
   m.customProgramCacheKey = () => 'zomb-' + (mat.map ? 1 : 0) + (mat.normalMap ? 1 : 0) + mat.type;
   return m;
 }
 
-// world-space retarget: same world rotation delta from T-pose, re-expressed in the target hierarchy
-function retarget(srcScene, tgtScene, clip, fps = 30) {
-  const sB = {}; srcScene.traverse(o => { if (o.isBone) sB[o.name] = o; });
-  const tB = []; tgtScene.traverse(o => { if (o.isBone) tB.push(o); });
-  srcScene.updateMatrixWorld(true); tgtScene.updateMatrixWorld(true);
-  const restS = {}, restT = {}, restL = {}; for (const n in sB) restS[n] = sB[n].getWorldQuaternion(new THREE.Quaternion());
-  for (const b of tB) { restT[b.name] = b.getWorldQuaternion(new THREE.Quaternion()); restL[b.name] = b.quaternion.clone(); }
-  const rootQ = {}; for (const b of tB) if (!b.parent.isBone) rootQ[b.name] = b.parent.getWorldQuaternion(new THREE.Quaternion());
-  const mx = new THREE.AnimationMixer(srcScene); const act = mx.clipAction(clip); act.play();
-  const n = Math.max(2, Math.round(clip.duration * fps) + 1); const times = []; const vals = {}; for (const b of tB) vals[b.name] = [];
-  const W = {}, q = new THREE.Quaternion(), inv = new THREE.Quaternion();
-  for (let f = 0; f < n; f++) {
-    const t = f / (n - 1) * clip.duration; times.push(t); mx.setTime(t); srcScene.updateMatrixWorld(true);
-    for (const b of tB) {
-      const pw = b.parent.isBone ? W[b.parent.name] : rootQ[b.name]; const sb = sB[b.name]; let w;
-      if (sb) { sb.getWorldQuaternion(q); w = q.clone().multiply(inv.copy(restS[b.name]).invert()).multiply(restT[b.name]); }
-      else w = pw.clone().multiply(restL[b.name]);
-      W[b.name] = w; const l = inv.copy(pw).invert().multiply(w); vals[b.name].push(l.x, l.y, l.z, l.w);
-    }
-  }
-  mx.stopAllAction(); mx.uncacheRoot(srcScene);
-  const tracks = tB.filter(b => sB[b.name]).map(b => new THREE.QuaternionKeyframeTrack(b.name + '.quaternion', times, vals[b.name]));
-  return new THREE.AnimationClip(clip.name + '_rt', clip.duration, tracks);
-}
 
 const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffa060 });
 const eyeGeo = new THREE.SphereGeometry(1, 6, 4);

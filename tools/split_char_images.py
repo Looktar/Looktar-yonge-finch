@@ -4,7 +4,7 @@
 import json, base64, os, sys
 d = os.path.join(os.path.dirname(__file__), '..', 'dist')
 os.makedirs(os.path.join(d, 'chars'), exist_ok=True)
-for name in ['Soldier', 'Michelle']:
+for name in ['Soldier']:  # Michelle dropped in v0.6.0 (cartoon look)
     p = os.path.join(d, name + '.json'); g = json.load(open(p))
     if not any('bufferView' in im for im in g.get('images', [])): print(name, 'already split'); continue
     uri = g['buffers'][0]['uri']; bin = base64.b64decode(uri[uri.index(',') + 1:])
