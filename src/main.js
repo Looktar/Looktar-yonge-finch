@@ -31,6 +31,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const CHUNK0 = { fpv: THREE.ShaderChunk.fog_pars_vertex, fv: THREE.ShaderChunk.fog_vertex, fpf: THREE.ShaderChunk.fog_pars_fragment, ff: THREE.ShaderChunk.fog_fragment, op: THREE.ShaderChunk.opaque_fragment }; // stock chunks, for #diag
 // dusk aerial perspective: fog turns warm toward the setting sun, cooler overhead
 THREE.ShaderChunk.fog_pars_vertex = '#ifdef USE_FOG\n varying float vFogDepth; varying vec3 vFogView;\n#endif';
 THREE.ShaderChunk.fog_vertex = '#ifdef USE_FOG\n vFogDepth = - mvPosition.z; vFogView = mvPosition.xyz;\n#endif';
@@ -596,7 +597,7 @@ computeFlow(START[0], START[1]);
 
 requestAnimationFrame(frame);
 // ---- #debug: on-device diagnosis panel (GPU name + feature toggles) ----
-if (HS === 'debug' || QS.has('debug')) {
+if (HS === 'debug' || HS === 'diag' || QS.has('debug')) {
   const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info');
   const gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
   const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:50%;top:60px;transform:translateX(-50%);z-index:99;background:#000c;color:#eee;font:13px/1.5 sans-serif;padding:8px 10px;border-radius:8px;max-width:92vw;pointer-events:auto';
@@ -629,5 +630,41 @@ if (HS === 'debug' || QS.has('debug')) {
   const live = document.createElement('div'); live.style.cssText = 'font:12px monospace;color:#9fd'; box.insertBefore(live, list);
   setInterval(() => { live.textContent = '曝光 ' + finalPass.uniforms.toneMappingExposure.value.toFixed(2) + ' | 平均亮度 ' + (finalPass.avg || 0).toFixed(3) + ' | AO ' + (aoPass.enabled ? '开' : '关') + ' | 像素比 ' + renderer.getPixelRatio().toFixed(2) + ' | ' + renderer.info.render.calls + ' 次绘制'; }, 500);
   document.body.appendChild(box);
+  // #diag: render the scene under a dozen variants into a small 8-bit target and report the brightness of each,
+  // so one screenshot from a device shows which stage goes dark
+  const diag = () => {
+    const w = 48, h = 27, rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.UnsignedByteType }), px = new Uint8Array(w * h * 4), rows = [];
+    const meas = () => { renderer.readRenderTargetPixels(rt, 0, 0, w, h, px); let s = 0, z = 0; for (let i = 0; i < px.length; i += 4) { const l = (px[i] + px[i + 1] + px[i + 2]) / 3; s += l; if (l < 2) z++; } const i = ((h >> 1) * w + (w >> 1)) * 4, c = px[i] + ',' + px[i + 1] + ',' + px[i + 2]; return '均值 ' + (s / (w * h)).toFixed(1) + ' 黑 ' + Math.round(z / (w * h) * 100) + '% 中心 ' + c; };
+    const grey = (M, o) => new M(Object.assign({ color: 0x808080 }, o));
+    const shot = (label, prep, undo) => { let r; try { if (prep) prep(); renderer.setRenderTarget(rt); renderer.setClearColor(0xff00ff, 1); renderer.clear(); renderer.render(scene, camera); r = meas(); } catch (e) { r = '出错 ' + e.message; } renderer.setRenderTarget(null); renderer.setClearColor(0x000000, 1); scene.overrideMaterial = null; if (undo) undo(); rows.push(label + ': ' + r); };
+    const pts = []; scene.traverse(o => { if ((o.isPointLight || o.isSpotLight) && o.visible) pts.push(o); });
+    shot('1 原场景', null);
+    shot('2 无光照灰', () => { scene.overrideMaterial = grey(THREE.MeshBasicMaterial); });
+    shot('3 Lambert灰', () => { scene.overrideMaterial = grey(THREE.MeshLambertMaterial); });
+    shot('4 Standard灰', () => { scene.overrideMaterial = grey(THREE.MeshStandardMaterial, { roughness: 1 }); });
+    shot('5 Standard无环境图', () => { scene.overrideMaterial = grey(THREE.MeshStandardMaterial, { roughness: 1, defines: { D5: 1 } }); scene.environment = null; }, () => { scene.environment = env0; });
+    shot('6 Standard只半球光', () => { scene.overrideMaterial = grey(THREE.MeshStandardMaterial, { roughness: 1, defines: { D6: 1 } }); sun.visible = false; pts.forEach(l => l.visible = false); }, () => { sun.visible = true; pts.forEach(l => l.visible = true); });
+    shot('7 Standard只太阳', () => { scene.overrideMaterial = grey(THREE.MeshStandardMaterial, { roughness: 1, defines: { D7: 1 } }); hemi.visible = false; scene.environment = null; pts.forEach(l => l.visible = false); }, () => { hemi.visible = true; scene.environment = env0; pts.forEach(l => l.visible = true); });
+    shot('8 Standard无点光源', () => { scene.overrideMaterial = grey(THREE.MeshStandardMaterial, { roughness: 1, defines: { D8: 1 } }); pts.forEach(l => l.visible = false); }, () => { pts.forEach(l => l.visible = true); });
+    const patched = { fpv: THREE.ShaderChunk.fog_pars_vertex, fv: THREE.ShaderChunk.fog_vertex, fpf: THREE.ShaderChunk.fog_pars_fragment, ff: THREE.ShaderChunk.fog_fragment, op: THREE.ShaderChunk.opaque_fragment };
+    const setCh = c => { THREE.ShaderChunk.fog_pars_vertex = c.fpv; THREE.ShaderChunk.fog_vertex = c.fv; THREE.ShaderChunk.fog_pars_fragment = c.fpf; THREE.ShaderChunk.fog_fragment = c.ff; THREE.ShaderChunk.opaque_fragment = c.op; };
+    shot('9 Standard原版片段', () => { setCh(CHUNK0); scene.overrideMaterial = grey(THREE.MeshStandardMaterial, { roughness: 1, defines: { D9: 1 } }); }, () => setCh(patched));
+    shot('10 Standard无雾', () => { scene.overrideMaterial = grey(THREE.MeshStandardMaterial, { roughness: 1, defines: { D10: 1 } }); scene.fog = null; }, () => { scene.fog = fog0; });
+    shot('11 原场景无雾', () => { scene.fog = null; allMats(m => m.needsUpdate = true); }, () => { scene.fog = fog0; allMats(m => m.needsUpdate = true); });
+    shot('12 原场景无环境图', () => { scene.environment = null; allMats(m => m.needsUpdate = true); }, () => { scene.environment = env0; allMats(m => m.needsUpdate = true); });
+    // the full post chain as shown on screen
+    composer.render(); const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d'); g.drawImage(renderer.domElement, 0, 0, w, h); const d = g.getImageData(0, 0, w, h).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += (d[i] + d[i + 1] + d[i + 2]) / 3;
+    rows.push('13 屏幕最终: 均值 ' + (s / (w * h)).toFixed(1) + ' | 曝光 ' + finalPass.uniforms.toneMappingExposure.value.toFixed(2) + ' 平均亮度 ' + (finalPass.avg || 0).toFixed(3));
+    const pf = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT), C = renderer.capabilities;
+    rows.push('精度 highp ' + pf.precision + ' | 片元uniform ' + C.maxFragmentUniforms + ' | 纹理 ' + C.maxTextures + ' | 点/聚光灯 ' + pts.length + ' | 相机 ' + camera.position.toArray().map(v => v.toFixed(0)).join(','));
+    rt.dispose(); return rows;
+  };
+  const dbt = document.createElement('button'); dbt.textContent = '运行诊断'; dbt.style.cssText = 'margin:3px;padding:6px 10px;font:13px sans-serif;border-radius:6px;border:0;background:#8fd3ff';
+  ['touchstart', 'pointerdown', 'mousedown'].forEach(ev => dbt.addEventListener(ev, e => e.stopPropagation()));
+  const dout = document.createElement('pre'); dout.style.cssText = 'margin:4px 0;white-space:pre-wrap;font:11px/1.35 monospace;color:#cfe';
+  const runD = () => { dout.textContent = '诊断中…'; setTimeout(() => { try { dout.textContent = diag().join('\n'); } catch (e) { dout.textContent = '诊断出错 ' + e.message; } }, 50); };
+  dbt.onclick = e => { e.stopPropagation(); runD(); }; box.append(dbt, dout);
+  window.__diag = diag;
+  if (HS === 'diag') setTimeout(runD, 4000);
 }
 window.__yf = { S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun, tick: () => frameNo++, mirror, WET, finalPass, vmScene, vmCam, vmRoot };
