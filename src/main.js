@@ -305,7 +305,7 @@ function newGame() {
 }
 
 // ---------- weapons logic ----------
-function reload() { const w = WEAP[S.wi], a = S.ammo[S.wi]; if (S.reloadT > 0 || a.mag >= w.mag || a.res <= 0) return; S.reloadT = w.reload; sfx.reload(); }
+function reload() { const w = WEAP[S.wi], a = S.ammo[S.wi]; if (S.reloadT > 0 || a.mag >= w.mag || a.res <= 0) return; S.reloadT = w.reload; S.revI = 0; if (!w.vm.userData.reload) sfx.reload(); }
 const ray = new THREE.Vector3(), org = new THREE.Vector3();
 function fire() {
   const w = WEAP[S.wi], a = S.ammo[S.wi];
@@ -447,6 +447,25 @@ function drawMinimap() {
 // ---------- main loop ----------
 let last = performance.now(), lampT = 0, locT = 0, sirenT = 14, stepT = 0;
 const fwd = new THREE.Vector3(), tmp = { x: 0, z: 0 };
+// keyframed reloads (weapons.js userData.reload): smootherstep between keys, slerped hand rotation
+const _rq = new THREE.Quaternion(), _rq2 = new THREE.Quaternion(), _re = new THREE.Euler(), _rv = new THREE.Vector3(), _rv2 = new THREE.Vector3();
+const smoother = t => t * t * t * (t * (t * 6 - 15) + 10);
+function reloadPose(RA, ud, t) {
+  const lh = RA.lh; if (!RA.home) RA.home = { p: lh.position.clone(), q: lh.quaternion.clone() };
+  const K = RA.keys; let i = 1; while (i < K.length - 1 && t > K[i][0]) i++;
+  const a = K[i - 1], b = K[i], u = smoother(Math.min(1, Math.max(0, (t - a[0]) / Math.max(1e-4, b[0] - a[0]))));
+  const pa = a[1] ? _rv.set(...a[1]) : _rv.copy(RA.home.p), qa = a[1] ? _rq.setFromEuler(_re.set(...a[2])) : _rq.copy(RA.home.q);
+  const pb = b[1] ? _rv2.set(...b[1]) : _rv2.copy(RA.home.p), qb = b[1] ? _rq2.setFromEuler(_re.set(...b[2])) : _rq2.copy(RA.home.q);
+  lh.position.copy(pa).lerp(pb, u); lh.quaternion.copy(qa).slerp(qb, u);
+  if (ud.mag) {
+    const mh = RA.magHand, hid = RA.magHide && t > RA.magHide[0] && t < RA.magHide[1]; ud.mag.visible = !hid;
+    if (mh && t > mh[0] && t < mh[1]) ud.mag.position.set(lh.position.x - mh[2][0], lh.position.y - mh[2][1], lh.position.z - mh[2][2]); else ud.mag.position.set(0, 0, 0);
+  }
+  const win = (w, x) => w && x > w[0] && x < w[1] ? Math.sin((x - w[0]) / (w[1] - w[0]) * Math.PI) : 0;
+  if (t > 0 && RA.ev) while ((S.revI || 0) < RA.ev.length && t >= RA.ev[S.revI][0]) { const n = RA.ev[S.revI][1]; if (sfx[n]) sfx[n](); S.revI = (S.revI || 0) + 1; }
+  const G = RA.gun, e = t <= 0 ? 0 : smoother(Math.min(1, Math.max(0, (t - G.t0) / 0.12))) * (1 - smoother(Math.min(1, Math.max(0, (t - (G.t1 - 0.12)) / 0.12))));
+  return { dx: G.dx * e, dy: G.dy * e, pitch: G.pitch * e, roll: G.roll * e, yaw: (G.yaw || 0) * e, pump: win(RA.pump, t), slide: win(RA.slide, t) * 2 };
+}
 function update(dt) {
   if (S.hitStop > 0) { S.hitStop -= dt; dt *= 0.15; } // a few frames of hit-stop on kills
   S.time += dt;
@@ -479,7 +498,8 @@ function update(dt) {
   S.fireT -= dt;
   if (S.reloadT > 0) { S.reloadT -= dt; if (S.reloadT <= 0) { const need = w.mag - a.mag; const got = Math.min(need, a.res); a.mag += got; if (a.res !== Infinity) a.res -= got; hud(); } }
   if (mouseDown && (w.auto || !S.fired)) { fire(); S.fired = true; } if (!mouseDown) S.fired = false;
-  const ud = w.vm.userData; const rp = S.reloadT > 0 ? Math.min(1, (w.reload - S.reloadT) / w.reload) : 0; const rl = S.reloadT > 0 ? Math.sin(rp * Math.PI) : 0;
+  const ud = w.vm.userData; const rp = S.reloadT > 0 ? Math.min(1, (w.reload - S.reloadT) / w.reload) : 0; const RA = ud.reload; const rl = S.reloadT > 0 && !RA ? Math.sin(rp * Math.PI) : 0;
+  const rk = RA ? reloadPose(RA, ud, S.reloadT > 0 ? rp : 0) : null; /* keyframed reload: left hand, magazine, pump / slide, gun tilt, foley */
   const wantAds = S.adsHeld && S.reloadT <= 0 && !(sprint && moving > 5) ? 1 : 0; S.ads = (S.ads || 0) + (wantAds - (S.ads || 0)) * Math.min(1, dt * 12); const ads = S.ads;
   S.swap = Math.max(0, (S.swap || 0) - dt); S.fireAnim = Math.max(0, (S.fireAnim || 0) - dt * 14);
   const bobK = Math.min(1, moving / 4) * (1 - ads * 0.85); const sprintK = sprint && moving > 5 ? 1 : 0;
@@ -492,9 +512,10 @@ function update(dt) {
   const convD = (-hz - ud.muzzle.z) * 1.28;
   const convYaw = Math.atan2(hx, convD), convPitch = Math.atan2(-(hy + ud.muzzle.y), convD * 1.4);
   w.vm.rotation.set(vo.rx * (1 - ads * 0.6) + rl * 0.5 - sprintK * 0.35 + (1 - ads) * convPitch, (1 - ads) * convYaw + sprintK * 0.55 + vo.ry * (1 - ads * 0.6), (1 - ads) * (ud.hipRoll || 0) + rl * 0.6 + sprintK * 0.25 + vo.rz * (1 - ads * 0.5));
-  if (ud.mag) { ud.mag.position.y = -Math.max(0, Math.sin(rp * Math.PI * 1.0)) * 0.22 * (rp > 0.2 && rp < 0.85 ? 1 : Math.max(0, Math.sin(rp * Math.PI))); }
-  if (ud.pump) { const pa = S.fireT > 0 && w.cas === 1 ? Math.sin(Math.max(0, Math.min(1, (w.rate - S.fireT) / 0.45)) * Math.PI) : 0; ud.pump.position.z = pa * 0.08; }
-  if (ud.slide) ud.slide.position.z = S.fireAnim * 0.025;
+  if (rk) { w.vm.position.x += rk.dx; w.vm.position.y += rk.dy; w.vm.rotation.x += rk.pitch; w.vm.rotation.y += rk.yaw; w.vm.rotation.z += rk.roll; }
+  if (ud.mag && !RA) { ud.mag.position.y = -Math.max(0, Math.sin(rp * Math.PI * 1.0)) * 0.22 * (rp > 0.2 && rp < 0.85 ? 1 : Math.max(0, Math.sin(rp * Math.PI))); }
+  if (ud.pump) { const pa = S.fireT > 0 && w.cas === 1 ? Math.sin(Math.max(0, Math.min(1, (w.rate - S.fireT) / 0.45)) * Math.PI) : 0; ud.pump.position.z = Math.max(pa, rk ? rk.pump : 0) * 0.08; }
+  if (ud.slide) ud.slide.position.z = Math.max(S.fireAnim, rk ? rk.slide : 0) * 0.025;
   const fovT = 72 + (ud.fov - 72) * ads + sprintK * FEEL.sprintFov * (1 - ads); if (Math.abs(camera.fov - fovT) > 0.01) { camera.fov += (fovT - camera.fov) * Math.min(1, dt * 10); camera.updateProjectionMatrix(); vmCam.fov = 56 + (ud.fov - 56) * ads; vmCam.updateProjectionMatrix(); }
   $('xh').style.opacity = 1 - ads;
   w.flash.visible = S.flashT > 0; muzzleLight.intensity = S.flashT > 0 ? 40 : 0; vmMuzzle.intensity = S.flashT > 0 ? 3 : 0; if (S.flashT > 0) { muzzleLight.position.copy(ud.muzzle).applyMatrix4(w.vm.matrix); vmMuzzle.position.copy(muzzleLight.position); } S.flashT -= dt;
