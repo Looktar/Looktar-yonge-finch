@@ -113,6 +113,16 @@ export class Kit {
     for (const [mat, gs] of this.buckets) { const m = new THREE.Mesh(mergeGeometries(gs), mat); m.frustumCulled = false; grp.add(m); }
     return grp;
   }
+  // one InstancedMesh per material, placed at [x, z, angle] (or [x, z, angle, y])
+  instanced(list, name = 'props') {
+    const grp = new THREE.Group(); grp.name = name; if (!list.length) return grp;
+    for (const [mat, gs] of this.buckets) {
+      const im = new THREE.InstancedMesh(mergeGeometries(gs), mat, list.length);
+      list.forEach(([x, z, a, y = 0], i) => { _q.setFromEuler(_e.set(0, a, 0)); im.setMatrixAt(i, _m.compose(_v.set(x, y, z), _q, _s.set(1, 1, 1))); });
+      im.instanceMatrix.needsUpdate = true; im.castShadow = im.receiveShadow = true; im.computeBoundingSphere(); grp.add(im);
+    }
+    return grp;
+  }
   get parts() { let n = 0; for (const gs of this.buckets.values()) n += gs.length; return n; }
 }
 

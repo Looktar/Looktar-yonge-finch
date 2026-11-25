@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { jerseyKit, coneKit, drumKit, hydrantKit, binKit, benchKit, newsboxKit } from './props.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { X } from './data_x.js';
 import { T as CITY_TREES } from './data_t.js';
@@ -137,15 +138,10 @@ export function addStreetscape(scene, ctx) {
   // ---- hydrants, stop signs, bus stop poles ----
   {
     const hyd = D.H.filter(([x, z]) => inPlay(x, z, 30));
-    const hg = mergeGeometries([new THREE.CylinderGeometry(0.13, 0.15, 0.6, 10).translate(0, 0.3, 0), new THREE.SphereGeometry(0.13, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 0.6, 0), new THREE.CylinderGeometry(0.06, 0.06, 0.42, 8).rotateZ(Math.PI / 2).translate(0, 0.42, 0), new THREE.CylinderGeometry(0.2, 0.2, 0.05, 10).translate(0, 0.03, 0)].map(x => x.toNonIndexed()));
-    const im = new THREE.InstancedMesh(hg, new THREE.MeshStandardMaterial({ color: 0xa8141a, roughness: 0.45, metalness: 0.2 }), Math.max(1, hyd.length));
-    hyd.forEach(([x, z], i) => { m4.compose(v.set(x, 0, z), q.setFromEuler(e.set(0, r() * 6, 0)), one); im.setMatrixAt(i, m4); col.addPoly([[x - 0.15, z - 0.15], [x + 0.15, z - 0.15], [x + 0.15, z + 0.15], [x - 0.15, z + 0.15]], false); });
-    im.instanceMatrix.needsUpdate = true; scene.add(im);
+    const hl = hyd.map(([x, z]) => { const nr = nearestRoad(roads, x, z); const a = nr.foot ? Math.atan2(nr.foot[0] - x, nr.foot[1] - z) + Math.PI : r() * 6; col.addPoly([[x - 0.15, z - 0.15], [x + 0.15, z - 0.15], [x + 0.15, z + 0.15], [x - 0.15, z + 0.15]], false); return [x, z, a]; });
+    scene.add(hydrantKit().instanced(hl, 'hydrants')); // pumper outlet faces the street
     // sidewalk furniture on Yonge / Finch: grey-and-green City of Toronto bins, benches, newspaper boxes
     {
-      const binG = mergeGeometries([new THREE.BoxGeometry(0.62, 1.05, 0.45).translate(0, 0.53, 0), new THREE.BoxGeometry(0.66, 0.08, 0.5).translate(0, 1.09, 0)].map(g => g.toNonIndexed()));
-      const benchG = mergeGeometries([new THREE.BoxGeometry(1.8, 0.06, 0.45).translate(0, 0.45, 0), new THREE.BoxGeometry(1.8, 0.4, 0.05).translate(0, 0.72, -0.22), new THREE.BoxGeometry(0.06, 0.45, 0.4).translate(-0.8, 0.22, 0), new THREE.BoxGeometry(0.06, 0.45, 0.4).translate(0.8, 0.22, 0)].map(g => g.toNonIndexed()));
-      const boxG = new THREE.BoxGeometry(0.5, 1.15, 0.45).translate(0, 0.58, 0);
       const spots = [];
       for (const rd of roads) {
         if (rd.t !== 'pri' && rd.t !== 'sec') continue;
@@ -160,13 +156,12 @@ export function addStreetscape(scene, ctx) {
           }
         }
       }
-      const kinds = [[binG, new THREE.MeshStandardMaterial({ color: 0x4d5459, roughness: 0.55, metalness: 0.4 }), 0.5], [benchG, new THREE.MeshStandardMaterial({ color: 0x3b3f43, roughness: 0.6, metalness: 0.5 }), 0.8], [boxG, new THREE.MeshStandardMaterial({ color: 0x1e5b3a, roughness: 0.5, metalness: 0.3 }), 1.01]];
+      const kinds = [[binKit, 0.5], [benchKit, 0.8], [newsboxKit, 1.01]];
       let lo = 0;
-      for (const [g, m, hi] of kinds) {
+      for (const [kit, hi] of kinds) {
         const sel = spots.filter(sp => sp[3] >= lo && sp[3] < hi); lo = hi; if (!sel.length) continue;
-        const ims = new THREE.InstancedMesh(g, m, sel.length);
-        sel.forEach(([x, z, a], i) => { m4.compose(v.set(x, 0, z), q.setFromEuler(e.set(0, a, 0)), one); ims.setMatrixAt(i, m4); col.addPoly([[x - 0.35, z - 0.35], [x + 0.35, z - 0.35], [x + 0.35, z + 0.35], [x - 0.35, z + 0.35]], false); });
-        ims.instanceMatrix.needsUpdate = true; ims.castShadow = true; ims.receiveShadow = true; scene.add(ims);
+        sel.forEach(([x, z]) => col.addPoly([[x - 0.35, z - 0.35], [x + 0.35, z - 0.35], [x + 0.35, z + 0.35], [x - 0.35, z + 0.35]], false));
+        scene.add(kit().instanced(sel.map(([x, z, a]) => [x, z, a + Math.PI]), 'furniture')); // fronts face the road
       }
     }
     const signPoleMat = new THREE.MeshStandardMaterial({ color: 0x8f969b, metalness: 0.7, roughness: 0.4 });
@@ -210,12 +205,6 @@ export function addStreetscape(scene, ctx) {
   // ---- construction clutter (Yonge & Finch has had road / TTC work for years): concrete Jersey barriers in short
   // runs along the curb, orange cones, and a few tall plastic barrels with reflective bands ----
   {
-    const jersey = (() => { const sh = new THREE.Shape([[-0.3, 0], [0.3, 0], [0.3, 0.08], [0.1, 0.25], [0.08, 0.81], [-0.08, 0.81], [-0.1, 0.25], [-0.3, 0.08]].map(([x, y]) => new THREE.Vector2(x, y)));
-      const g = new THREE.ExtrudeGeometry(sh, { depth: 3.0, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 1 }); g.translate(0, 0, -1.5); return g; })();
-    const cone = mergeGeometries([new THREE.BoxGeometry(0.36, 0.03, 0.36).translate(0, 0.015, 0), new THREE.ConeGeometry(0.13, 0.7, 12, 1, true).translate(0, 0.38, 0)].map(g => g.toNonIndexed()));
-    const barrel = new THREE.CylinderGeometry(0.26, 0.3, 1.05, 14).translate(0, 0.53, 0);
-    const bandTex = (() => { const c = document.createElement('canvas'); c.width = 16; c.height = 128; const g = c.getContext('2d'); g.fillStyle = '#e8601c'; g.fillRect(0, 0, 16, 128); g.fillStyle = '#f2f2ea'; for (const y of [18, 50, 82]) g.fillRect(0, y, 16, 12); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
-    const barMat = new THREE.MeshStandardMaterial({ color: 0xb9b6ae, roughness: 0.9 }), coneMat = new THREE.MeshStandardMaterial({ color: 0xff5a12, roughness: 0.55 }), drumMat = new THREE.MeshStandardMaterial({ map: bandTex, roughness: 0.6 });
     const B = [], Cn = [], Dr = [];
     for (const rd of roads) {
       if (rd.t !== 'pri' && rd.t !== 'sec') continue;
@@ -230,8 +219,7 @@ export function addStreetscape(scene, ctx) {
         }
       }
     }
-    const put = (geo, mat, list) => { if (!list.length) return; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach(([x, z, a], i) => { m4.compose(v.set(x, 0, z), q.setFromEuler(e.set(0, a, 0)), one); im.setMatrixAt(i, m4); }); im.instanceMatrix.needsUpdate = true; im.castShadow = im.receiveShadow = true; scene.add(im); };
-    put(jersey, barMat, B); put(cone, coneMat, Cn); put(barrel, drumMat, Dr);
+    scene.add(jerseyKit().instanced(B, 'barriers'), coneKit().instanced(Cn, 'cones'), drumKit().instanced(Dr, 'drums'));
   }
   return { poles };
 }
