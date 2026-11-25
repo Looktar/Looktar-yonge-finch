@@ -231,3 +231,33 @@ export function utilityPoleKit() {
   return k;
 }
 
+
+// ---- Toronto street-furniture bus shelter (local frame: +z along the road, back wall at +x, open to the road at -x,
+// double-sided ad lightbox closing the +z end). adMat is the lit ad face (built by street.js) ----
+export function shelterKit(adMat) {
+  const m = mats(), k = new Kit(), L = 3.8, Dp = 1.5, H = 2.45;
+  const frame = m.darkGrey, glass = new THREE.MeshStandardMaterial({ color: 0xa9bcc0, roughness: 0.04, metalness: 0.1, transparent: true, opacity: 0.22, depthWrite: false, envMapIntensity: 1.3 });
+  for (const [x, z] of [[Dp / 2, -L / 2], [Dp / 2, L / 2], [-Dp / 2 + 0.1, -L / 2], [-Dp / 2 + 0.1, L / 2]]) {
+    k.add(chamferBox(0.08, H, 0.08, 0.012), frame, { at: [x, H / 2, z] });
+    k.add(chamferBox(0.2, 0.02, 0.2, 0.006), frame, { at: [x, 0.01, z] }); // base plates
+  }
+  k.add(chamferBox(Dp + 0.35, 0.06, L + 0.3, 0.02), frame, { at: [0.05, H + 0.03, 0] }); // roof deck
+  k.add(chamferBox(Dp + 0.38, 0.16, 0.05, 0.015), frame, { at: [0.05, H + 0.02, -L / 2 - 0.15] });
+  k.add(chamferBox(Dp + 0.38, 0.16, 0.05, 0.015), frame, { at: [0.05, H + 0.02, L / 2 + 0.15] });
+  k.add(chamferBox(0.05, 0.16, L + 0.35, 0.015), frame, { at: [-Dp / 2 - 0.12, H + 0.02, 0] }); // fascia over the open side
+  k.add(chamferBox(Dp + 0.3, 0.01, L + 0.25, 0.003), glass, { at: [0.05, H - 0.01, 0] }); // translucent roof panel
+  // back wall: three glass panes in rails, a frit band at eye height
+  for (let i = 0; i < 3; i++) { const z = -L / 2 + L * (i + 0.5) / 3; k.add(chamferBox(0.012, 2.0, L / 3 - 0.08, 0.004), glass, { at: [Dp / 2, 1.2, z] }); }
+  for (const y of [0.18, 2.22]) k.add(chamferBox(0.06, 0.06, L, 0.01), frame, { at: [Dp / 2, y, 0] });
+  for (const z of [-L / 6, L / 6]) k.add(chamferBox(0.05, 2.04, 0.05, 0.01), frame, { at: [Dp / 2, 1.2, z] });
+  k.add(chamferBox(0.014, 0.12, L - 0.1, 0.003), m.white, { at: [Dp / 2 - 0.005, 1.45, 0] }); // frit band
+  // -z end: glass panel; +z end: ad lightbox
+  k.add(chamferBox(Dp - 0.2, 2.0, 0.012, 0.004), glass, { at: [0.05, 1.2, -L / 2] });
+  k.add(chamferBox(Dp - 0.1, 1.95, 0.16, 0.02), frame, { at: [0.05, 1.15, L / 2] });
+  for (const s of [1, -1]) { const p = new THREE.PlaneGeometry(Dp - 0.3, 1.7); if (s < 0) p.rotateY(Math.PI); k.add(p, adMat, { at: [0.05, 1.15, L / 2 + s * 0.082] }); }
+  // bench along the back wall, armrests
+  k.add(chamferBox(0.38, 0.05, 2.2, 0.012), m.steelGrey, { at: [Dp / 2 - 0.26, 0.47, -0.3] });
+  for (const z of [-1.3, -0.3, 0.7]) k.add(chamferBox(0.06, 0.44, 0.06, 0.01), frame, { at: [Dp / 2 - 0.2, 0.23, z] });
+  for (const z of [-0.65, 0.05]) k.add(chamferBox(0.32, 0.04, 0.04, 0.01), frame, { at: [Dp / 2 - 0.26, 0.62, z] });
+  return k;
+}
