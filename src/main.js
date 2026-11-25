@@ -18,7 +18,7 @@ import { initSurf } from './surf.js';
 import { buildRifle, buildShotgun, buildPistol, flashTextures, makeFlash, casingGeo, mats } from './weapons.js';
 
 const $ = id => document.getElementById(id);
-const QUAL = { high: { pr: 1.5, bloom: true, shadow: 4096, aa: true, ao: 'full', lights: 6, refl: 0.6 }, mid: { pr: 1, bloom: true, shadow: 2048, aa: true, ao: 'half', lights: 4, refl: 0.45 }, low: { pr: 0.75, bloom: false, shadow: 0, aa: false, ao: false, lights: 2, refl: 0 } };
+const QUAL = { high: { pr: 1.5, bloom: true, shadow: 4096, aa: true, ao: 'full', lights: 6, refl: 0.6, vol: 14 }, mid: { pr: 1, bloom: true, shadow: 2048, aa: true, ao: 'half', lights: 4, refl: 0.45, vol: 10 }, low: { pr: 0.75, bloom: false, shadow: 0, aa: false, ao: false, lights: 2, refl: 0, vol: 0 } };
 // diagnosis switches: ?nowet or #nowet (artifact links only carry a plain #name); #safe turns all of them off
 const QS = new URLSearchParams(location.search); const HS = location.hash.slice(1); const OFF = k => QS.has('no' + k) || HS === 'no' + k || HS === 'safe';
 const TOUCH = isTouch(); if (TOUCH) { document.body.classList.add('touch'); QUAL.low.pr = 1; QUAL.mid.pr = 1; }
@@ -36,6 +36,23 @@ renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadow
 let envOk = true;
 const CHUNK0 = { fpv: THREE.ShaderChunk.fog_pars_vertex, fv: THREE.ShaderChunk.fog_vertex, fpf: THREE.ShaderChunk.fog_pars_fragment, ff: THREE.ShaderChunk.fog_fragment, op: THREE.ShaderChunk.opaque_fragment }; // stock chunks, for #diag
 // dusk aerial perspective: fog turns warm toward the setting sun, cooler overhead
+// volumetric sun light (Saltline marches the sun's shadow map through the air): the shadow map is an orthographic
+// projection, so the shadow-space coordinate is affine along the view ray and can be interpolated between the camera
+// and the fragment; VOL steps are baked from the quality at load (0 on phones)
+const VOL = (Q && Q.vol) || 0;
+THREE.ShaderChunk.shadowmap_vertex = THREE.ShaderChunk.shadowmap_vertex + `
+#if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0 && defined(USE_FOG)
+  vVolCam = directionalShadowMatrix[0] * vec4(cameraPosition, 1.0);
+#endif`;
+THREE.ShaderChunk.shadowmap_pars_vertex = THREE.ShaderChunk.shadowmap_pars_vertex + `
+#if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0 && defined(USE_FOG)
+  varying vec4 vVolCam;
+#endif`;
+THREE.ShaderChunk.shadowmap_pars_fragment = THREE.ShaderChunk.shadowmap_pars_fragment + `
+#if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0 && defined(USE_FOG)
+  varying vec4 vVolCam;
+  #define VOL_OK
+#endif`; /* materials without the shadow chunks (basic, custom) skip the march */
 THREE.ShaderChunk.fog_pars_vertex = '#ifdef USE_FOG\n varying float vFogDepth; varying vec3 vFogView;\n#endif';
 THREE.ShaderChunk.fog_vertex = '#ifdef USE_FOG\n vFogDepth = - mvPosition.z; vFogView = mvPosition.xyz;\n#endif';
 THREE.ShaderChunk.fog_pars_fragment = `#ifdef USE_FOG
@@ -49,7 +66,7 @@ THREE.ShaderChunk.fog_pars_fragment = `#ifdef USE_FOG
 THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   vec3 fogWD = normalize((vec4(vFogView, 0.0) * viewMatrix).xyz);
   float fogSun = max(dot(fogWD, vec3(${SUN.x.toFixed(4)}, ${SUN.y.toFixed(4)}, ${SUN.z.toFixed(4)})), 0.0);
-  vec3 fogC = mix(fogColor, vec3(1.3, 0.85, 0.5), pow(fogSun, 8.0) * 0.7) * (1.0 + 0.35 * pow(fogSun, 32.0));
+  vec3 fogC = mix(fogColor, vec3(1.3, 0.85, 0.5), pow(fogSun, 8.0) * ${VOL > 0 ? '0.45' : '0.7'}) * (1.0 + 0.35 * pow(fogSun, 32.0)); /* with volumetrics on, part of the sun glow comes from the lit air instead */
   #ifdef FOG_EXP2
     /* height fog: dense near the street, thinning upward (analytic integral of d0 * exp(-h / 28 m) along the ray) */
     float fogDist = length(vFogView); float h0 = cameraPosition.y, dh = fogWD.y * fogDist;
@@ -59,6 +76,23 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
   #endif
   gl_FragColor.rgb = mix(gl_FragColor.rgb, fogC, fogFactor);
+  #if ${VOL} > 0 && defined(VOL_OK)
+  {
+    /* march camera -> fragment in shadow space; lit samples add sun-coloured in-scatter (Henyey-Greenstein g = 0.55) */
+    vec4 sc0 = vVolCam, sc1 = vDirectionalShadowCoord[0]; float vd = min(fogDist, 140.0), lit = 0.0;
+    float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    for (int i = 0; i < ${VOL}; i++) {
+      float t = (float(i) + jit) / float(${VOL}) * (vd / max(fogDist, 1e-3));
+      vec4 c = mix(sc0, sc1, t); vec3 sp = c.xyz / c.w;
+      bool inside = sp.x > 0.0 && sp.x < 1.0 && sp.y > 0.0 && sp.y < 1.0 && sp.z < 1.0;
+      lit += inside ? texture2DCompare(directionalShadowMap[0], sp.xy, sp.z - 0.002) : 1.0;
+    }
+    lit /= float(${VOL});
+    float g = 0.55, ph = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * dot(fogWD, vec3(${SUN.x.toFixed(4)}, ${SUN.y.toFixed(4)}, ${SUN.z.toFixed(4)})), 1.5) * 0.08;
+    float amt = (1.0 - exp(-fogDensity * vd * 1.6)) * ph;
+    gl_FragColor.rgb = max(gl_FragColor.rgb + vec3(1.25, 0.78, 0.42) * amt * (lit - 0.5) * 5.0, 0.0); /* shadowed air darker than the average fog, lit air brighter */
+  }
+  #endif
 #endif`;
 // half-float frame buffers overflow to Inf above 65504; a near-mirror surface catching the sun (puddles, wet
 // glass, droplets) can exceed that on real GPUs, and bloom then smears Inf/NaN over the whole frame
