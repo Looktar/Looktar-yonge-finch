@@ -15,6 +15,6 @@
 - 仓库管理（v0.4.0）：ESLint、Vitest 单元测试、Playwright 冒烟测试、`build.py --check`、GitHub Actions CI、GitHub Pages 自动发布、Issue / PR 模板、本文件和 DECISIONS / BACKLOG / CREDITS。
 
 ### 已知问题（按优先级）
-1. **iPhone 上受光面偏暗、窗户不亮**：原因还没找到，`#debug` 里的开关都试过无效；v0.4.0 起手机默认关 AO，等试玩确认。GitHub Pages 链接不经过 claude.ai 沙箱，也可以用来对比。
+1. **iPhone 上受光面偏暗、窗户不亮**：原因还没找到，`#debug` 里的开关都试过无效；v0.4.0 起手机默认关 AO，等试玩确认。2026-11-25 用 Pages 链接试过，一样暗，所以不是沙箱造成的。新增 `#diag` 自动诊断（12 种渲染组合各测一次亮度）。桌面软件渲染下的参考值：1 原场景 36.8，2 无光照灰 72.6，3 Lambert 44.7，4 Standard 55.1，13 屏幕最终 96.3（曝光 1.58）。
 2. 逐栋外观核对还没做（`LOOKS` 机制已有，内容为空），用苹果地图 Look Around 对照。
 3. ESLint 还有 14 条未用变量警告。
