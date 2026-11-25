@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GAS } from './gas.js';
-import { jerseyKit, coneKit, drumKit, hydrantKit, binKit, benchKit, newsboxKit, utilityPoleKit } from './props.js';
+import { jerseyKit, coneKit, drumKit, hydrantKit, binKit, benchKit, newsboxKit, utilityPoleKit, shelterKit } from './props.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { X } from './data_x.js';
 import { T as CITY_TREES } from './data_t.js';
@@ -175,29 +175,22 @@ export function addStreetscape(scene, ctx) {
     D.Q.forEach(([x, z], i) => { const nr = nearestRoad(roads, x, z); const ang = nr.dir ? Math.atan2(nr.dir[0], nr.dir[1]) : 0; m4.compose(v.set(x, 0, z), q.setFromEuler(e.set(0, ang, 0)), one); sp.setMatrixAt(k++, m4); bs.setMatrixAt(i, m4); });
     sp.count = k; for (const m of [sp, so, bs]) { m.instanceMatrix.needsUpdate = true; scene.add(m); }
     // TTC glass shelters at the stops on arterials: steel frame, glass sides and back, a lit ad panel at one end
-    const sh = [], shGlass = [], shAd = [];
+    const shelters = [];
     for (const [x, z] of D.Q) {
       const nr = nearestRoad(roads, x, z, ['pri', 'sec']); if (!nr.road || !nr.foot || nr.d > (nr.road.w || 12) / 2 + 6) continue;
       let ax = x - nr.foot[0], az = z - nr.foot[1]; const L = Math.hypot(ax, az) || 1; ax /= L; az /= L; // away from the road
       const ang = Math.atan2(nr.dir[0], nr.dir[1]); const cx = x + ax * 1.6, cz = z + az * 1.6;
-      const put = (g, list) => { g.rotateY(ang); if ((-Math.sin(ang) * ax - Math.cos(ang) * az) > 0) g.rotateY(0); g.translate(cx, 0, cz); list.push(g.toNonIndexed()); };
-      // local frame: +z along the road, +x across; back wall on the side away from the road
-      const bx = Math.sign(Math.cos(ang) * ax - Math.sin(ang) * az) || 1;
-      for (const [px, pz] of [[-0.7, -1.8], [-0.7, 1.8], [0.7, -1.8], [0.7, 1.8]]) put(new THREE.BoxGeometry(0.06, 2.4, 0.06).translate(px, 1.2, pz), sh);
-      put(new THREE.BoxGeometry(1.6, 0.08, 3.8).translate(0, 2.42, 0), sh);
-      put(new THREE.BoxGeometry(0.02, 2.0, 3.6).translate(bx * 0.7, 1.15, 0), shGlass);
-      put(new THREE.BoxGeometry(1.4, 2.0, 0.02).translate(0, 1.15, -1.8), shGlass);
-      put(new THREE.BoxGeometry(1.4, 1.75, 0.08).translate(0, 1.1, 1.8), shAd);
+      const bx = Math.sign(Math.cos(ang) * ax - Math.sin(ang) * az) || 1; // which local x side faces away from the road
+      shelters.push([cx, cz, ang + (bx < 0 ? Math.PI : 0)]);
+      col.addPoly([[cx - 0.3, cz - 0.3], [cx + 0.3, cz - 0.3], [cx + 0.3, cz + 0.3], [cx - 0.3, cz + 0.3]], false);
     }
-    if (sh.length) {
-      scene.add(new THREE.Mesh(mergeGeometries(sh), new THREE.MeshStandardMaterial({ color: 0x5c6166, metalness: 0.7, roughness: 0.4 })));
-      scene.add(new THREE.Mesh(mergeGeometries(shGlass), new THREE.MeshStandardMaterial({ color: 0x9fb4b8, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.28, depthWrite: false })));
+    if (shelters.length) {
       const ac = document.createElement('canvas'); ac.width = 256; ac.height = 320; const ag = ac.getContext('2d');
       const gr = ag.createLinearGradient(0, 0, 0, 320); gr.addColorStop(0, '#c8442f'); gr.addColorStop(1, '#5a1630'); ag.fillStyle = gr; ag.fillRect(0, 0, 256, 320);
       ag.fillStyle = '#ffffff'; ag.font = 'bold 40px "Helvetica Neue", Arial, sans-serif'; ag.fillText('WINTER', 24, 70); ag.fillText('IS COMING', 24, 116);
-      ag.font = '22px "Helvetica Neue", Arial, sans-serif'; ag.fillText('Parkas & boots — 40% off', 24, 160); ag.fillStyle = '#f6d36b'; ag.fillRect(24, 250, 150, 44); ag.fillStyle = '#5a1630'; ag.font = 'bold 22px Arial'; ag.fillText('SHOP NOW', 40, 280);
+      ag.font = '22px "Helvetica Neue", Arial, sans-serif'; ag.fillText('Parkas & boots — 40% off', 24, 160, 210); ag.fillStyle = '#f6d36b'; ag.fillRect(24, 250, 150, 44); ag.fillStyle = '#5a1630'; ag.font = 'bold 22px Arial'; ag.fillText('SHOP NOW', 40, 280);
       const at = new THREE.CanvasTexture(ac); at.colorSpace = THREE.SRGBColorSpace;
-      scene.add(new THREE.Mesh(mergeGeometries(shAd), new THREE.MeshStandardMaterial({ map: at, emissiveMap: at, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.3 })));
+      scene.add(shelterKit(new THREE.MeshStandardMaterial({ map: at, emissiveMap: at, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.3 })).instanced(shelters, 'shelters'));
     }
   }
   // ---- construction clutter (Yonge & Finch has had road / TTC work for years): concrete Jersey barriers in short
