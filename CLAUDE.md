@@ -37,7 +37,7 @@ src/buildings.js   建筑解析 + 分风格立面 shader + 阳台/招牌/雨篷/
 src/world.js       碰撞网格、道路、地面、路灯、信号灯、车、树、边界、小地图；调用 buildCity()
 src/street.js      人行道、斑马线、围栏、电线杆、高压塔、消防栓、站牌；nearestRoad()
 src/fx.js          粒子、黄昏天空 makeSky()、太阳 SUN、合成音效 Sfx
-src/zombie.js      Mixamo 骨骼角色加载/重定向/僵尸化/程序化姿态
+src/zombie.js      Mixamo 骨骼角色（只用 Soldier）加载/僵尸化/程序化姿态
 src/kit.js         零件库（照 Saltline）：倒角盒、旋转体、带孔挤出、管线；顶点 AO + 边缘磨损；按材质合并
 src/surf.js        程序贴图：噪声库 + 材质家族（阳极氧化、磷化钢、聚合物、橡胶、布料、油漆、混凝土），开局烘焙；kitMaterial() 三向投影 + 边缘磨损 + 雨珠
 src/weapons.js     步枪（零件库 162 件）/霰弹/手枪视图模型

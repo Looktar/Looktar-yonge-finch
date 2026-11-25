@@ -218,7 +218,7 @@ const zombies = [];
 const TYPES = { walk: { hp: 100, sp: [1.0, 1.6], dmg: 12, sc: 1 }, run: { hp: 70, sp: [3.6, 4.4], dmg: 9, sc: 0.97 }, brute: { hp: 480, sp: [1.4, 1.7], dmg: 28, sc: 1.4 } };
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _c = new THREE.Color();
 const assetsReady = loadZombieAssets(ev => { if (ev && ev.total) $('start').textContent = '加载角色 ' + Math.round(ev.loaded / ev.total * 100) + '%'; }).then(a => {
-  ZA = a; for (let i = 0; i < ZMAX; i++) { const ac = new ZombieActor(a, i % 2 ? 'soldier' : 'woman'); ac.root.traverse(o => { if (o.isMesh) o.castShadow = true; }); ac.root.visible = false; ac.free = true; scene.add(ac.root); actors.push(ac); }
+  ZA = a; for (let i = 0; i < ZMAX; i++) { const ac = new ZombieActor(a, 'soldier'); ac.root.traverse(o => { if (o.isMesh) o.castShadow = true; }); ac.root.visible = false; ac.free = true; scene.add(ac.root); actors.push(ac); }
   $('start').disabled = false; $('start').textContent = '进入路口';
   if (S.state === 'menu') { for (let i = 0; i < 10; i++) { const px = player.x, pz = player.z; player.x = -3; player.z = 92; spawnZombie('walk'); player.x = px; player.z = pz; } }
 }).catch(err => { $('start').disabled = false; $('start').textContent = '进入路口（角色加载失败）'; console.error(err); });
@@ -391,7 +391,7 @@ function spawnZombie(type) {
     const ac = actors.find(a => a.free); if (!ac) return false;
     const T = TYPES[type]; const zz = { x, z, yaw: 0, type, hp: T.hp, sp: T.sp[0] + Math.random() * (T.sp[1] - T.sp[0]), dmg: T.dmg, sc: T.sc * (0.92 + Math.random() * 0.16), phase: Math.random() * 10, dead: -1, atkT: 0, stag: 0, flash: 0, los: false, losT: Math.random(), groanT: 2 + Math.random() * 6, hx: x, hy: 1.6, hz: z, lean: (Math.random() - 0.5) * 0.3, armOff: Math.random() * 0.25, seed: Math.random() * 9 };
     ac.free = false; ac.root.visible = true; ac.root.rotation.set(0, 0, 0); zz.actor = ac; const sc = zz.sc;
-    ac.root.scale.setScalar(sc); const tint = type === 'brute' ? [0.55, 0.42, 0.4] : [0.7 + Math.random() * 0.3, 0.7 + Math.random() * 0.3, 0.7 + Math.random() * 0.3]; ac.uni.uTint.value.setRGB(...tint);
+    ac.root.scale.setScalar(sc); const g0 = 0.75 + Math.random() * 0.3; const tint = type === 'brute' ? [0.55, 0.42, 0.4] : [g0 * (0.95 + Math.random() * 0.1), g0 * (0.95 + Math.random() * 0.1), g0 * (0.85 + Math.random() * 0.12)]; /* muted greys / khakis, not pastel */ ac.uni.uTint.value.setRGB(...tint);
     ac.mixer.timeScale = 1; if (type === 'run') ac.play('run', zz.sp / 4.2); else ac.play('walk', 0.45 + zz.sp * 0.22);
     zombies.push(zz); return true;
   }
@@ -684,4 +684,4 @@ if (HS === 'debug' || HS === 'diag' || QS.has('debug')) {
   window.__diag = diag;
   if (HS === 'diag') setTimeout(runD, 4000);
 }
-window.__yf = { Raycaster: THREE.Raycaster, S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun, tick: () => frameNo++, mirror, WET, finalPass, vmScene, vmCam, vmRoot };
+window.__yf = { Raycaster: THREE.Raycaster, spawnZombie, S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun, tick: () => frameNo++, mirror, WET, finalPass, vmScene, vmCam, vmRoot };
