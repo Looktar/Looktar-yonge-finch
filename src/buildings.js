@@ -263,6 +263,14 @@ export function facadeMaterial() {
             win = mull * band * (1.0 - pier);
             alb = base * (0.96 + 0.06 * noise);
             litF = 0.24;
+            /* window-wall variety, per building: opaque spandrel-glass columns, a narrow vent pane split off each bay,
+               opaque lower panels on some towers */
+            float bs = h21(vec2(seed, 7.0)), col = h21(vec2(floor(g.x), seed * 1.3));
+            float vent = 1.0 - pulse(fract(g.x), 0.6, 0.625, dg.x) * step(0.35, bs);
+            float lowP = step(0.55, bs) * (1.0 - step(0.42, fract(g.y)));
+            float spand = max(step(col, 0.18 + 0.12 * bs) * win, lowP * win);
+            win *= vent * (1.0 - spand);
+            alb = mix(alb, vAcc * 0.55 + 0.02, spand); rgh = mix(rgh, 0.12, spand); mtl = mix(mtl, 0.35, spand);
           } else if (st == 4) { /* glass curtain wall: spandrel glass + vision glass */
             float vis = pulse(g.y, 0.2, 1.0, dg.y);
             win = mull; alb = base;

@@ -333,6 +333,15 @@ function buildGround(tex, roadMat, mask) {
 }
 
 // ---------- props ----------
+// a spruce branch seen from above: a central twig with needles angled forward, on a transparent card
+function needleTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128; const g = c.getContext('2d'); const r = rng(91); g.lineCap = 'round';
+  const twig = (x0, y0, x1, y1, n, len) => { g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); g.lineWidth = 1.2;
+    for (let i = 0; i < n; i++) { const t = i / n, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t, a = Math.atan2(y1 - y0, x1 - x0); for (const s of [1, -1]) { const b = a + s * (0.7 + r() * 0.3), l = len * (1 - 0.6 * t) * (0.7 + r() * 0.6); g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(b) * l, y + Math.sin(b) * l); g.stroke(); } } };
+  twig(4, 64, 250, 64, 90, 16);
+  for (let k = 0; k < 7; k++) { const x = 30 + k * 30, s = k % 2 ? 1 : -1; twig(x, 64, x + 45, 64 + s * (28 + r() * 20), 22, 9); }
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+}
 // fractal twig silhouette on a transparent card (drawn once): fine branches fanning up from the bottom centre
 function twigTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); const r = rng(77);
@@ -372,8 +381,14 @@ function treeGeoms() {
     grow(new THREE.Vector3(0, 0, 0), new THREE.Vector3((r() - 0.5) * 0.08, 1, (r() - 0.5) * 0.08).normalize(), h0 * 1.6, 0.2 + r() * 0.05, 3);
     variants.push(mergeGeometries(parts)); twigs.push(mergeGeometries(cards));
   }
-  const ever = mergeGeometries([new THREE.CylinderGeometry(0.12, 0.16, 1.4, 5).translate(0, 0.7, 0), new THREE.ConeGeometry(1.9, 3.2, 7).translate(0, 2.6, 0), new THREE.ConeGeometry(1.5, 2.8, 7).translate(0, 4.0, 0), new THREE.ConeGeometry(1.0, 2.4, 7).translate(0, 5.3, 0)].map(g => g.toNonIndexed()));
-  return { variants, ever, twigs, twigTex: twigTexture() };
+  // conifer: dark inner core plus tiers of drooping needle-branch cards (alpha), so the silhouette is ragged
+  const evCore = [new THREE.CylinderGeometry(0.12, 0.16, 1.4, 5).translate(0, 0.7, 0), new THREE.ConeGeometry(1.35, 2.8, 7).translate(0, 2.4, 0), new THREE.ConeGeometry(1.0, 2.4, 7).translate(0, 3.7, 0), new THREE.ConeGeometry(0.6, 1.8, 7).translate(0, 4.9, 0)];
+  const ever = mergeGeometries(evCore.map(g => g.toNonIndexed()));
+  const evCards = []; { const r = rng(808);
+    for (let t = 0; t < 7; t++) { const y = 1.75 + t * 0.56, rad = 2.0 * (1 - t / 7.5) + 0.25, n = 7 - Math.floor(t / 2);
+      for (let k = 0; k < n; k++) { const a = (k / n + r() * 0.15 + t * 0.37) * Math.PI * 2; const g = new THREE.PlaneGeometry(rad * 1.25, rad * 0.75); g.translate(rad * 0.55, -rad * 0.12, 0); g.rotateZ(-0.35 - r() * 0.2); g.rotateX((r() - 0.5) * 0.6); g.rotateY(a); g.translate(0, y, 0); evCards.push(g); } } }
+  const everCards = mergeGeometries(evCards);
+  return { variants, ever, everCards, twigs, twigTex: twigTexture(), needleTex: needleTexture() };
 }
 
 const placeRng = rng(4242);
@@ -615,12 +630,12 @@ export function buildWorld(scene, tex, quality) {
     for (let ox = -5; ox <= 5; ox++) for (let oz = -5; oz <= 5; oz++) { const k = (ix + ox) + (iz + oz) * GN; if (Math.abs(ox) <= 3 && Math.abs(oz) <= 3 && col.blocked[k]) bnear = true; if (roadNear[k]) rnear = true; }
     if (bnear && !rnear) trees.push([x, z, 0.8 + r() * 0.5, r() < 0.25 ? 1 : 0]);
   }
-  const tg = treeGeoms(); const barkMat = new THREE.MeshStandardMaterial({ color: 0x4b4239, roughness: 0.95 }); const everMat = new THREE.MeshStandardMaterial({ color: 0x1a2a1c, roughness: 0.9 });
+  const tg = treeGeoms(); const barkMat = new THREE.MeshStandardMaterial({ color: 0x4b4239, roughness: 0.95 }); const everMat = new THREE.MeshStandardMaterial({ color: 0x0f1a11, roughness: 0.95 }); const needleMat = new THREE.MeshStandardMaterial({ color: 0x22382a, roughness: 0.9, alphaMap: tg.needleTex, alphaTest: 0.35, side: THREE.DoubleSide });
   const twigMat = new THREE.MeshStandardMaterial({ color: 0x3e362f, roughness: 0.95, alphaMap: tg.twigTex, alphaTest: 0.35, side: THREE.DoubleSide }); /* fine twigs, no shadow casting (cheap) */
   const groups = [[], [], [], []]; for (const t of trees) groups[t[3] ? 3 : Math.floor(r() * 3)].push(t);
   groups.forEach((gr, gi) => {
     if (!gr.length) return; const im = new THREE.InstancedMesh(gi === 3 ? tg.ever : tg.variants[gi], gi === 3 ? everMat : barkMat, gr.length);
-    const tw = gi === 3 ? null : new THREE.InstancedMesh(tg.twigs[gi], twigMat, gr.length);
+    const tw = new THREE.InstancedMesh(gi === 3 ? tg.everCards : tg.twigs[gi], gi === 3 ? needleMat : twigMat, gr.length);
     gr.forEach((t, i) => { e.set(0, r() * 6.28, 0); q.setFromEuler(e); const sc = t[2]; m4.compose(v.set(t[0], 0, t[1]), q, new THREE.Vector3(sc, sc * (0.9 + r() * 0.3), sc)); im.setMatrixAt(i, m4); if (tw) tw.setMatrixAt(i, m4); });
     im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; scene.add(im);
     if (tw) { tw.instanceMatrix.needsUpdate = true; tw.frustumCulled = false; tw.receiveShadow = true; scene.add(tw); }
