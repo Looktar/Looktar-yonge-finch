@@ -54,6 +54,10 @@ const FAMILIES = {
   galv: `vec2 v = vor(uv, 14.0); float m = fbm(uv, 5.0, 5), g = vn(uv, 200.0);
     alb = vec3(0.56, 0.58, 0.59) * (0.78 + 0.16 * v.y + 0.18 * m); tint = 0.0; ao = 1.0;
     rough = 0.42 + 0.18 * v.y + 0.08 * (g - 0.5); metal = 0.85; h = 0.5 + 0.12 * (v.y - 0.5) + 0.06 * (g - 0.5);`,
+  // weathered creosoted wood (utility poles): vertical grain along uv.y, checks (splits), grey bleaching
+  wood: `float grain = fbm(vec2(uv.x * 9.0, uv.y * 0.35), 16.0, 5), m = fbm(uv, 3.0, 4), chk = 1.0 - smoothstep(0.0, 0.025, abs(vn(vec2(uv.x * 3.0, uv.y * 0.15), 32.0) - 0.5));
+    alb = mix(vec3(0.16, 0.12, 0.09), vec3(0.3, 0.28, 0.25), smoothstep(0.35, 0.75, m)) * (0.75 + 0.4 * grain) * (1.0 - 0.6 * chk); tint = 0.0; ao = 1.0 - 0.4 * chk;
+    rough = 0.88 + 0.08 * grain; metal = 0.0; h = 0.5 + 0.25 * (grain - 0.5) - 0.4 * chk;`,
   // satin paint with no chips (alloy wheels, calipers, new street furniture); takes colour
   satin: `float m = fbm(uv, 4.0, 5), g = vn(uv, 160.0);
     alb = vec3(0.5) * (0.94 + 0.12 * m); tint = 1.0; ao = 1.0; rough = 0.38 + 0.1 * m; metal = 0.0; h = 0.5 + 0.08 * (g - 0.5);`,
