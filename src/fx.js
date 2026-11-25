@@ -119,6 +119,12 @@ export class Sfx {
   shot(kind) { if (!this.ok) return; if (kind === 1) { this.burst(0.5, 1400, 0.7, 1.2); this.tone(120, 40, 0.35, 0.9); } else if (kind === 2) { this.burst(0.18, 2600, 0.8, 0.7, 'bandpass'); this.tone(200, 60, 0.15, 0.5); } else { this.burst(0.22, 2000, 0.6, 0.85); this.tone(150, 50, 0.18, 0.6); } }
   click() { if (this.ok) this.tone(1800, 1200, 0.04, 0.15, 'square'); }
   reload() { if (!this.ok) return; this.tone(900, 700, 0.05, 0.15, 'square'); this.tone(500, 300, 0.07, 0.15, 'square', 0, 0.35); this.tone(1100, 900, 0.05, 0.18, 'square', 0, 0.9); }
+  // reload foley, fired at keyframe times by the viewmodel animation (layered: a metallic click + a filtered noise body)
+  magOut() { if (!this.ok) return; this.tone(420, 260, 0.06, 0.18, 'square'); this.burst(0.14, 1400, 2.5, 0.25, 'bandpass'); this.tone(180, 120, 0.12, 0.12, 'triangle', 0, 0.05); }
+  magIn() { if (!this.ok) return; this.burst(0.06, 2600, 3, 0.35, 'bandpass'); this.tone(1500, 1100, 0.035, 0.22, 'square'); this.tone(240, 160, 0.08, 0.16, 'triangle', 0, 0.02); }
+  bolt() { if (!this.ok) return; this.burst(0.05, 3200, 4, 0.4, 'bandpass'); this.tone(900, 600, 0.05, 0.22, 'square'); this.burst(0.09, 1200, 2, 0.25, 'bandpass', 0, 0.06); }
+  shell() { if (!this.ok) return; this.burst(0.05, 2200, 3, 0.25, 'bandpass'); this.tone(700, 520, 0.04, 0.12, 'triangle'); }
+  rack() { if (!this.ok) return; this.burst(0.07, 1600, 2.5, 0.35, 'bandpass'); this.tone(500, 330, 0.06, 0.18, 'square'); this.burst(0.07, 2000, 2.5, 0.35, 'bandpass', 0, 0.16); this.tone(620, 420, 0.05, 0.18, 'square', 0, 0.16); }
   hit() { if (this.ok) { this.burst(0.12, 700, 1.5, 0.5, 'bandpass'); } }
   head() { if (this.ok) { this.tone(2200, 1800, 0.06, 0.2, 'triangle'); } }
   hurt() { if (this.ok) { this.tone(90, 45, 0.3, 0.8); this.burst(0.2, 400, 1, 0.6); } }

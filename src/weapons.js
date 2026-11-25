@@ -93,12 +93,28 @@ function kitHand(side, curl = 1) {
   // cuff and strap
   k.add(loft([[sx * 0.004, -0.03, 0.04], [sx * 0.004, -0.05, 0.035], [sx * 0.004, -0.075, 0.03]], [[0.022, 0.03], [0.024, 0.031], [0.025, 0.032]], 14, { up: [1, 0, 0], caps: false }), K.glove);
   k.add(chamferBox(0.052, 0.014, 0.064, 0.004), K.rub, { at: [sx * 0.004, -0.046, 0.036], rot: [0.1, 0, 0], ao: 0.85 });
-  return k.build('hand');
+  const g = k.build('hand'); g.userData.side = side; return g;
 }
-function forearm(from, to, mat = null) { // sleeve from wrist (from) to elbow (to)
-  const m = Object.assign({}, mats()); if (mat) m.sleeve = mat; const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to); const L = a.distanceTo(b);
-  const geo = new THREE.CylinderGeometry(0.033, 0.043, L, 14, 4); const pos = geo.attributes.position; for (let i = 0; i < pos.count; i++) { const y = pos.getY(i); const ang = Math.atan2(pos.getZ(i), pos.getX(i)); const wr = 1 + Math.sin(ang * 3 + y * 40) * 0.05; pos.setX(i, pos.getX(i) * wr); pos.setZ(i, pos.getZ(i) * wr); } geo.computeVertexNormals();
-  const me = new THREE.Mesh(geo, m.sleeve); me.position.copy(a).add(b).multiplyScalar(0.5); me.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), a.clone().sub(b).normalize()); me.frustumCulled = false; return me;
+
+// ---------- arms: lofted sleeves (Saltline's hands and arms are lofted rings) ----------
+// starts at the glove cuff (taken from the placed hand's matrix), swells along the forearm, folds at the elbow and
+// runs on toward the shoulder (off screen); a darker cuff band and a hook-and-loop tab where it meets the glove
+// arm as a child of its hand, so it follows the hand during reloads (rigid, like Saltline's unskinned arms)
+function armOn(hand, elbow, shoulder) { const a = kitArm(hand, elbow, shoulder); hand.updateMatrix(); a.applyMatrix4(hand.matrix.clone().invert()); hand.add(a); }
+function kitArm(hand, elbow, shoulder) {
+  const K = kmats(), k = new Kit(); hand.updateMatrix();
+  const side = hand.userData.side || 1;
+  const W = new THREE.Vector3(side * 0.004, -0.072, 0.032).applyMatrix4(hand.matrix), E = new THREE.Vector3(...elbow), S = new THREE.Vector3(...shoulder);
+  const P = (a, b, t) => a.clone().lerp(b, t);
+  const dirW = E.clone().sub(W).normalize(), W0 = W.clone().addScaledVector(dirW, -0.012);
+  const pts = [W0, W, P(W, E, 0.3), P(W, E, 0.6), P(W, E, 0.82), E.clone(), P(E, S, 0.14), P(E, S, 0.3), P(E, S, 0.55)];
+  const r = [0.034, 0.037, 0.045, 0.049, 0.054, 0.05, 0.057, 0.053, 0.058]; // folds: the radius dips and swells near the elbow
+  k.add(loft(pts.map(v => v.toArray()), r.map(x => [x, x * 0.92]), 14, { up: [0, 1, 0], caps: true }), K.sleeve);
+  const C1 = W.clone().addScaledVector(dirW, 0.03);
+  k.add(loft([W0.toArray(), W.toArray(), C1.toArray()], [[0.039, 0.036], [0.041, 0.038], [0.04, 0.037]], 14, { up: [0, 1, 0], caps: false }), K.glove); // cuff band
+  const tab = C1.clone().addScaledVector(new THREE.Vector3(0, 1, 0), 0.038);
+  k.add(chamferBox(0.03, 0.008, 0.04, 0.003), K.rub, { at: tab.toArray(), rot: [0, Math.atan2(dirW.x, dirW.z), 0] });
+  return k.build('arm');
 }
 
 // ---------- AR-15 style carbine with holographic sight, built as a Saltline-style part list ----------
@@ -204,11 +220,16 @@ export function buildRifle() {
   // hands & sleeves
   const rh = kitHand(1, 1); rh.position.set(0.019, -0.074, 0.016); rh.rotation.set(-0.4, 0, 0); g.add(rh); // finger wrap centred on the grip
   const lh = kitHand(-1, 0.95); lh.position.set(-0.012, -0.016, -0.36); lh.rotation.set(Math.PI / 2, 0, -0.55); g.add(lh); // wraps the handguard from below, fingers up the right side
-  g.add(forearm([0.02, -0.13, 0.03], [0.1, -0.26, 0.26], K.sleeve));
-  g.add(forearm([-0.05, -0.03, -0.29], [-0.2, -0.24, -0.02], K.sleeve));
+  armOn(rh, [0.07, -0.29, 0.27], [0.02, -0.1, 0.58]); // right elbow tucked down and back
+  armOn(lh, [-0.2, -0.26, -0.1], [-0.4, -0.1, 0.55]); // left arm reaching forward under the handguard
   g.traverse(o => o.frustumCulled = false);
   ensureKit(g);
-  Object.assign(g.userData, { muzzle: new THREE.Vector3(0, hv, -0.67), eject: new THREE.Vector3(0.02, 0.03, -0.1), sight: new THREE.Vector3(0, dotV + 0.004, -0.12), mag, hip: new THREE.Vector3(0.2, -0.165, -0.45), hipRoll: 0.12, adsZ: -0.2, fov: 52 }); // framed like Saltline's carbine: big in the lower right, muzzle just under the crosshair
+  // reload: left-hand keyframes [t, pos, euler] (null = its home pose), gun tilt, magazine riding the hand, foley events
+  g.userData.reload = { lh, keys: [[0, null], [0.12, null], [0.26, [-0.05, -0.13, -0.16], [1.0, 0.25, -1.35]], [0.3, [-0.05, -0.135, -0.16], [1.0, 0.25, -1.35]],
+    [0.45, [-0.07, -0.5, -0.06], [0.7, 0.25, -1.4]], [0.58, [-0.07, -0.5, -0.06], [0.7, 0.25, -1.4]], [0.68, [-0.05, -0.135, -0.16], [1.0, 0.25, -1.35]], [0.72, [-0.05, -0.125, -0.16], [1.0, 0.25, -1.35]],
+    [0.8, [-0.04, 0.005, -0.1], [1.57, 0, -1.6]], [0.86, [-0.04, 0.005, -0.1], [1.57, 0, -1.6]], [1, null]],
+    gun: { t0: 0.06, t1: 0.88, roll: 0.35, pitch: 0.22, yaw: 0.3, dx: -0.07, dy: 0.09 }, magHand: [0.29, 0.72, [-0.05, -0.135, -0.16]], ev: [[0.3, 'magOut'], [0.72, 'magIn'], [0.8, 'bolt']] };
+  Object.assign(g.userData, { muzzle: new THREE.Vector3(0, hv, -0.67), eject: new THREE.Vector3(0.02, 0.03, -0.1), sight: new THREE.Vector3(0, dotV + 0.004, -0.12), mag, hip: new THREE.Vector3(0.2, -0.235, -0.29), hipRoll: 0.08, adsZ: -0.2, fov: 52 }); // framed like Saltline's carbine: big in the lower right, muzzle just under the crosshair
   return g;
 }
 
@@ -224,11 +245,14 @@ export function buildShotgun() {
   g.add(M([prof([[0.035, -0.03], [0.1, -0.03], [0.1, -0.05], [0.04, -0.052], [0.035, -0.045]], 0.012, 0.0015, [roundRect(0.043, -0.047, 0.094, -0.033, 0.004)])], m.metal));
   const rh = kitHand(1, 1); rh.position.set(0.019, -0.045, 0.045); rh.rotation.set(-1.1, 0, 0); g.add(rh);
   const lh = kitHand(-1, 0.95); lh.position.set(-0.014, -0.03, -0.35); lh.rotation.set(Math.PI / 2, 0, -0.55); g.add(lh);
-  g.add(forearm([0.0, -0.12, 0.03], [0.1, -0.26, 0.26]));
-  g.add(forearm([-0.05, -0.05, -0.28], [-0.2, -0.24, -0.02]));
+  armOn(rh, [0.07, -0.27, 0.28], [0.02, -0.1, 0.58]);
+  armOn(lh, [-0.2, -0.26, -0.08], [-0.4, -0.1, 0.55]);
   g.traverse(o => o.frustumCulled = false);
   ensureKit(g);
-  g.userData = { muzzle: new THREE.Vector3(0, 0.024, -0.71), eject: new THREE.Vector3(0.02, 0.02, -0.12), sight: new THREE.Vector3(0, 0.05, -0.2), pump: pumpM, hip: new THREE.Vector3(0.15, -0.16, -0.42), adsZ: -0.24, fov: 58 };
+  const P = [[-0.03, -0.075, -0.13], [1.2, 0.2, -1.1]], Q = [[-0.08, -0.42, 0.0], [0.8, 0.2, -1.2]];
+  const sgReload = { lh, keys: [[0, null], [0.08, Q[0], Q[1]], [0.2, P[0], P[1]], [0.3, Q[0], Q[1]], [0.42, P[0], P[1]], [0.52, Q[0], Q[1]], [0.64, P[0], P[1]], [0.76, null], [1, null]],
+    gun: { t0: 0.04, t1: 0.78, roll: -0.45, pitch: 0.1, yaw: 0.25, dx: -0.04, dy: 0.03 }, pump: [0.82, 0.96], ev: [[0.2, 'shell'], [0.42, 'shell'], [0.64, 'shell'], [0.84, 'rack']] };
+  g.userData = { reload: sgReload, muzzle: new THREE.Vector3(0, 0.024, -0.71), eject: new THREE.Vector3(0.02, 0.02, -0.12), sight: new THREE.Vector3(0, 0.05, -0.2), pump: pumpM, hip: new THREE.Vector3(0.15, -0.16, -0.42), adsZ: -0.24, fov: 58 };
   return g;
 }
 
@@ -244,11 +268,13 @@ export function buildPistol() {
   const mag = M([boxU(0.022, 0.012, -0.02, 0.03, -0.124, 0, 0.003)], m.poly); g.add(mag);
   const rh = kitHand(1, 1); rh.position.set(0.02, -0.06, 0.014); rh.rotation.set(-0.3, 0, 0); g.add(rh);
   const lh = kitHand(-1, 1); lh.position.set(-0.03, -0.07, 0.0); lh.rotation.set(-0.3, 0.3, 0.2); g.add(lh);
-  g.add(forearm([0.02, -0.11, 0.03], [0.12, -0.22, 0.24]));
-  g.add(forearm([-0.03, -0.12, 0.02], [-0.15, -0.23, 0.22]));
+  armOn(rh, [0.1, -0.24, 0.22], [0.12, -0.08, 0.5]);
+  armOn(lh, [-0.13, -0.25, 0.2], [-0.3, -0.08, 0.5]);
   g.traverse(o => o.frustumCulled = false);
   ensureKit(g);
-  g.userData = { muzzle: new THREE.Vector3(0, 0.03, -0.195), eject: new THREE.Vector3(0.015, 0.04, -0.06), sight: new THREE.Vector3(0, 0.055, -0.02), slide: slideM, mag, hip: new THREE.Vector3(0.12, -0.13, -0.36), adsZ: -0.26, fov: 60 };
+  const pReload = { lh, keys: [[0, null], [0.14, null], [0.32, [-0.05, -0.42, 0.06], [-0.6, 0.3, 0.4]], [0.45, [-0.01, -0.2, 0.02], [-0.3, 0.3, 0.2]], [0.56, [-0.01, -0.165, 0.01], [-0.3, 0.3, 0.2]], [0.68, null], [1, null]],
+    gun: { t0: 0.05, t1: 0.9, roll: 0.2, pitch: 0.2, yaw: 0.15, dx: -0.02, dy: 0.02 }, magHide: [0.12, 0.42], magHand: [0.42, 0.56, [-0.01, -0.165, 0.01]], slide: [0.72, 0.86], ev: [[0.12, 'magOut'], [0.56, 'magIn'], [0.74, 'rack']] };
+  g.userData = { reload: pReload, muzzle: new THREE.Vector3(0, 0.03, -0.195), eject: new THREE.Vector3(0.015, 0.04, -0.06), sight: new THREE.Vector3(0, 0.055, -0.02), slide: slideM, mag, hip: new THREE.Vector3(0.12, -0.13, -0.36), adsZ: -0.26, fov: 60 };
   return g;
 }
 
