@@ -13,11 +13,10 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
-  deploy:
+  # upload and deploy in separate jobs (GitHub's template): a deploy in the same job sometimes cannot see the
+  # artifact uploaded seconds earlier ("No artifacts named github-pages")
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
       - run: rm -f dist/game.js
@@ -25,5 +24,12 @@ jobs:
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
       - id: deploy
         uses: actions/deploy-pages@v4
