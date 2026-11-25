@@ -16,3 +16,4 @@
 | D-10 | 2026-11-24 | `dist/index.html` 提交进仓库，CI 用 `npm run check` 确认它和 `src/` 一致 | artifact 和 Pages 都直接发布 `dist/`，不需要在线构建 |
 | D-11 | 2026-11-24 | 版本号写在 `package.json`，构建时替换菜单里的 `__BUILD__` | 试玩反馈时能对上是哪个版本 |
 | D-12 | 2026-11-25 | 环境图生成后先自检，失败就关掉环境光，不让整座城变黑 | 苹果 GPU 上环境图出现过 NaN；宁可少反射也不能黑屏 |
+| D-13 | 2026-11-25 | 试玩链接以后只用 GitHub Pages，claude.ai artifact 不再更新 | 总决策要求 |

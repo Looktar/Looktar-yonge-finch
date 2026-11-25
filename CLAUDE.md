@@ -7,7 +7,7 @@
 
 ## 技术栈
 - three.js r170（WebGLRenderer + EffectComposer），esbuild 打包成**单个 HTML**。
-- 发布到 claude.ai artifact：新版 https://claude.ai/artifact/4PRSuvUCvZC57hKZHgX5jd （2026-11-24 起，街景对照版）；旧版 slug `57bd93be-f9e8-4974-b546-461bba6874a5` 保留未动。均仅本人可见。发布文件：`dist/index.html`、`dist/Soldier.json`、`dist/Michelle.json`、`dist/chars/*`（角色贴图）、`dist/tex/*.jpg`（PBR 贴图，按相对路径 `tex/` 加载）。
+- 试玩链接只用 GitHub Pages：https://looktar.github.io/Looktar-yonge-finch/ （`main` 合并后自动发布，网址区分大小写）。claude.ai artifact（4PRSuvUCvZC57hKZHgX5jd、57bd93be）不再更新。
 - 依赖：three r170、n8ao（环境光遮蔽，CC0）。n8ao 会引用 `postprocessing`，构建时用 `--alias` 指到 `src/pp_stub.js`，不打包进来。
 
 ## 常用命令
@@ -26,7 +26,7 @@ npm run serve     # http://localhost:8765/ （必须走 http，file:// 下角色
 - 每个改动开新分支，提 PR 合并进 `main`；PR 模板在 `.github/PULL_REQUEST_TEMPLATE.md`。
 - 合并前：`npm run build && npm run check && npm run lint && npm test && npm run smoke` 全绿，冒烟截图亲自看一遍。
 - 发版时改 `package.json` 的 `version`（菜单底部显示），再 `npm run build`。
-- `main` 推送后 GitHub Actions 自动发布 `dist/` 到 GitHub Pages：https://looktar.github.io/Looktar-yonge-finch/ （网址区分大小写；仓库 Settings → Pages → Source 已选 GitHub Actions）。claude.ai artifact 照旧手动发布。
+- `main` 推送后 GitHub Actions 自动发布 `dist/` 到 GitHub Pages：https://looktar.github.io/Looktar-yonge-finch/ （网址区分大小写；仓库 Settings → Pages → Source 已选 GitHub Actions）。
 - 已知但还没修的 bug 先写成 `it.fails` 测试。
 
 ## 目录
