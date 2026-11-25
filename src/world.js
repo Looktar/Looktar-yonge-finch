@@ -8,6 +8,7 @@ import { buildCity } from './buildings.js';
 import { groundMaterial, ribbonMaterial, tex as tex2 } from './pbr.js';
 import { carGeoms, carPaint } from './cars.js';
 import { buildGasStation } from './gas.js';
+import { placeClutter } from './clutter.js';
 import { wheelKit, wheelKitLow, lampKit, LAMP_LENS, signalKit, SIGNAL_LENSES } from './props.js';
 import { addStreetscape, cityTrees, parseX, nearestRoad } from './street.js';
 
@@ -613,6 +614,7 @@ export function buildWorld(scene, tex, quality) {
   // ---- street furniture from OSM: sidewalks, crossings, fences, canopies, poles & wires, hydro towers, hydrants, signs ----
   addStreetscape(scene, { col, roads, onRoad, rng: r, X: XD, walkMat, PLAY_C, PLAY_R });
   scene.add(buildGasStation(col)); // 5571 Yonge St (OSM), south-east of the intersection
+  const clutter = placeClutter(scene, { col, onRoad, rng: r, near: [XING[0], XING[1] + 10, 140] }); // Poly Haven scans (CC0) against walls / at the curb
 
   // ---- boundary: concrete barriers + tape on roads crossing the ring ----
   const barr = [];
@@ -637,7 +639,7 @@ export function buildWorld(scene, tex, quality) {
   // named segments for location HUD
   const named = []; for (const rd of roads) if (rd.name && rd.name !== 'Finch Bus Terminal') for (let i = 0; i < rd.p.length - 1; i++) named.push([rd.p[i][0], rd.p[i][1], rd.p[i + 1][0], rd.p[i + 1][1], rd.name]);
 
-  const stats = { buildings: bl.length, heights: bl.stats, realTrees, fillTrees: trees.length - realTrees, detail: city.detail };
+  const stats = { clutter: clutter.count, buildings: bl.length, heights: bl.stats, realTrees, fillTrees: trees.length - realTrees, detail: city.detail };
   return { stats, col, lamps, fires, bmat, signalMat, hazMat, headsFl, poolFlMat, minimap: mm, mmS, named, cars, roads, onRoad, updateCarLOD };
 }
 

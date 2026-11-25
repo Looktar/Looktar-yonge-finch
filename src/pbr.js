@@ -70,7 +70,7 @@ export function wetPatch(sh, damp = '1.0', pud = '1.0') { // GLSL expressions: h
     .replace('#include <emissivemap_fragment>', `{
       wPud = wetPud(vWw.xz) * uWet * (${pud}); wDamp = wetDamp(vWw.xz) * uWet * (${damp});
       diffuseColor.rgb *= mix(1.0, 0.5, wDamp) * mix(1.0, 0.35, wPud);
-      roughnessFactor = mix(roughnessFactor, 0.55, wDamp); roughnessFactor = mix(roughnessFactor, 0.12, wPud);
+      roughnessFactor = mix(roughnessFactor, 0.44, wDamp); roughnessFactor = mix(roughnessFactor, 0.12, wPud);
       normal = normalize(mix(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), wPud));
     }
     #include <emissivemap_fragment>`)
@@ -81,7 +81,7 @@ export function wetPatch(sh, damp = '1.0', pud = '1.0') { // GLSL expressions: h
       if (uReflOn > 0.5) { /* rough wet asphalt stretches reflections vertically (Saltline's long streaks of light) */
         float st = (1.0 - wPud) * 0.03 * vRuv.w; /* streak centred on the true reflection: a one-sided smear picked up the bright sky */
         for (int i = 0; i < 6; i++) { float o = (float(i) - 2.5) * st * 0.3; refl += texture2DProj(tRefl, vRuv + vec4(off * vRuv.w, o, 0.0)).rgb; }
-        refl /= 6.0;
+        refl /= 6.0; refl *= vec3(0.62, 0.64, 0.66); /* dirty street water: darker than a mirror, so far puddles do not read as snow */
       }
       float amt = uReflOn * wPud * mix(fres, 1.0, 0.25); /* only standing water mirrors; damp asphalt keeps its own (rougher) specular */
       outgoingLight = mix(outgoingLight, refl, clamp(amt, 0.0, 1.0));

@@ -9,6 +9,7 @@
 | 行道树 | 多伦多市 Street Tree Data | Open Government Licence – Toronto |
 | 角色模型 Soldier（`assets/`、`dist/Soldier.json`、`dist/chars/`；Michelle 自 v0.6.0 起不再使用） | three.js 示例里的 Mixamo 角色 | Mixamo 条款 |
 | 地面、路面、墙面贴图（`dist/tex/`：沥青、扫帚纹混凝土、草、红砖、灰泥、预制混凝土、花岗岩） | [Poly Haven](https://polyhaven.com) | CC0 |
+| 街边杂物模型（`dist/models/`：垃圾袋、旧轮胎、油桶、水泥袋、金属垃圾桶、电箱 ×2、空调外机），由 `tools/fetch_polyhaven.py` 下载并压缩 | [Poly Haven](https://polyhaven.com/models) | CC0 |
 | 环境光遮蔽 | [N8AO](https://github.com/N8python/n8ao) | CC0 |
 | 渲染引擎 | [three.js](https://threejs.org) | MIT |
 | 字体 Oswald、Barlow Condensed、Noto Sans SC | Google Fonts | SIL OFL |

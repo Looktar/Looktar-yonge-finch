@@ -1,6 +1,6 @@
 {
   "name": "yonge-finch-dusk",
-  "version": "0.6.2",
+  "version": "0.6.5",
   "description": "央街·芬治 黄昏：浏览器 3D 第一人称打僵尸，1:1 还原多伦多 Yonge × Finch。游戏打包成单个 HTML，开发工具只在开发时用。",
   "scripts": {
     "build": "python3 build.py",
