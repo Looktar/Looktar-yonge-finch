@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
-export const LOOK = { agx: 0.25, pow: 1.18, sat: 1.02, ca: 0.0013, sharpen: 0.3, grain: 0.02, vignette: 0.3, shafts: 0.9, streak: 0.05, key: 0.16, minExp: 0.6, maxExp: 2.0, tau: 1.5 };
+export const LOOK = { agx: 0.25, pow: 1.18, sat: 1.02, ca: 0.0013, sharpen: 0.3, grain: 0.02, vignette: 0.3, shafts: 0.6, streak: 0.05, key: 0.135, minExp: 0.6, maxExp: 1.55, tau: 1.5 };
 
 export function makeFinalPass() {
   const pass = new ShaderPass({
