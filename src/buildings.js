@@ -4,6 +4,7 @@
 // brick / stucco / siding houses with gable or hip roofs, the TTC & GO terminals).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { buildStorefronts } from './storefront.js';
 import { B } from './data_b.js';
 import { HM, BX } from './data_x.js';
 import { nearestRoad } from './street.js';
@@ -413,7 +414,7 @@ export function buildCity(roads, col) {
   for (const b of list) assignStyle(b, r);
   const gb = new GB();
   const white = new THREE.Color(1, 1, 1);
-  const balcSlab = [], balcRail = [], awnings = [], signs = [];
+  const balcSlab = [], balcRail = [], awnings = [], signs = [], shopFronts = [];
   const fronts = ['pri', 'sec', 'ter'];
   const usedSign = new Set();
 
@@ -552,6 +553,8 @@ export function buildCity(roads, col) {
       }
     }
 
+    // storefront frames follow every street-facing ground-floor edge the shader glazes
+    if (y0 < 1 && b.st !== ST.TRN) for (const e of edges) if (e && e.front) shopFronts.push({ e, b, sfH: b.st === ST.RET ? 3.5 : 4.3 });
     // shop signs & awnings on street fronts
     for (const e of edges) {
       if (!e || !e.front) continue;
@@ -607,17 +610,12 @@ export function buildCity(roads, col) {
     balcRail.forEach((s, i) => { e4.set(0, s[3], 0); q4.setFromEuler(e4); m4.compose(v4.set(s[0], s[1], s[2]), q4, s4.set(s[6], s[5], s[4])); im.setMatrixAt(i, m4); });
     im.frustumCulled = false; im.renderOrder = 4; grp.add(im);
   }
-  if (awnings.length) {
-    const ag = new THREE.BoxGeometry(1, 1, 1);
-    const im = new THREE.InstancedMesh(ag, new THREE.MeshStandardMaterial({ roughness: 0.7 }), awnings.length);
-    awnings.forEach((a, i) => { const e = a.e; const mid = (a.s0 + a.s1) / 2; e4.set(0, Math.atan2(e.tx, e.tz), 0); q4.setFromEuler(e4); m4.compose(v4.set(e.a[0] + e.tx * mid + e.nx * 0.6, a.y, e.a[1] + e.tz * mid + e.nz * 0.6), q4, s4.set(1.2, 0.14, a.s1 - a.s0)); im.setMatrixAt(i, m4); im.setColorAt(i, C(a.c)); });
-    im.castShadow = true; im.frustumCulled = false; grp.add(im);
-  }
+  grp.add(buildStorefronts(shopFronts, signs, awnings, (x, z) => Math.hypot(x, z - 60) < 330));
   // signs: textured, backlit quads
   if (signs.length) {
     const P = [], U = [], Nn = [];
     for (const s of signs) {
-      const e = s.e; const o = 0.09; const ax = e.a[0] + e.tx * s.s0 + e.nx * o, az = e.a[1] + e.tz * s.s0 + e.nz * o, bx = e.a[0] + e.tx * s.s1 + e.nx * o, bz = e.a[1] + e.tz * s.s1 + e.nz * o;
+      const e = s.e; const o = 0.195; /* on the face of the lightbox (storefront.js) */ const ax = e.a[0] + e.tx * s.s0 + e.nx * o, az = e.a[1] + e.tz * s.s0 + e.nz * o, bx = e.a[0] + e.tx * s.s1 + e.nx * o, bz = e.a[1] + e.tz * s.s1 + e.nz * o;
       const col0 = (s.id % 4) / 4, row0 = Math.floor(s.id / 4) / 8; const u0 = col0 + 0.002, u1 = col0 + 0.25 - 0.002, v1 = 1 - row0 - 0.004, v0 = 1 - row0 - 0.125 + 0.004;
       // edges run clockwise seen from above, so for a viewer outside, a->q runs right-to-left: mirror u
       const qd = [[ax, s.y0, az, u1, v0], [bx, s.y0, bz, u0, v0], [bx, s.y1, bz, u0, v1], [ax, s.y1, az, u1, v1]];
