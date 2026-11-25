@@ -50,6 +50,9 @@ const FAMILIES = {
   paint: `float m = fbm(uv, 4.0, 5), g = vn(uv, 128.0), chip = smoothstep(0.715, 0.735, fbm(uv + 0.37, 16.0, 5));
     alb = mix(vec3(0.5) * (0.9 + 0.2 * m), vec3(0.16, 0.08, 0.045), chip); tint = 1.0 - chip; ao = 1.0;
     rough = mix(0.42 + 0.12 * m, 0.8, chip); metal = 0.0; h = 0.55 - 0.3 * chip + 0.06 * (g - 0.5);`,
+  // satin paint with no chips (alloy wheels, calipers, new street furniture); takes colour
+  satin: `float m = fbm(uv, 4.0, 5), g = vn(uv, 160.0);
+    alb = vec3(0.5) * (0.94 + 0.12 * m); tint = 1.0; ao = 1.0; rough = 0.38 + 0.1 * m; metal = 0.0; h = 0.5 + 0.08 * (g - 0.5);`,
   // weathered concrete: barriers, bases, kerbs
   concrete: `float m = fbm(uv, 4.0, 6), g = vn(uv, 180.0); vec2 v = vor(uv, 24.0); float pit = 1.0 - smoothstep(0.0, 0.12, v.x);
     float streak = fbm(vec2(uv.x * 1.0, uv.y * 0.12), 24.0, 4); /* rain-washed vertical grime */

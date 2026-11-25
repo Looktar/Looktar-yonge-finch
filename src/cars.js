@@ -8,15 +8,15 @@ import * as THREE from 'three';
 // side profiles: [z, top y] control points, linearly interpolated, smoothed by the sampling
 const KINDS = {
   sedan: {
-    L: 4.7, W: 1.84, base: 2.8, tyre: 0.33, belt: 0.96, cabin: [-1.35, 1.02], pillarB: -0.2,
+    L: 4.7, W: 1.84, base: 2.8, tyre: 0.33, belt: 0.96, cabin: [-1.35, 1.02], pillarB: -0.2, doors: [1.05, -0.2, -1.3], tops: [1.0, 2.05, -1.42, -2.05],
     top: [[-2.35, 0.62], [-2.3, 0.86], [-2.05, 0.98], [-1.45, 1.0], [-0.95, 1.4], [0.25, 1.44], [1.0, 1.0], [1.95, 0.9], [2.3, 0.74], [2.35, 0.5]],
   },
   suv: {
-    L: 4.75, W: 1.92, base: 2.85, tyre: 0.37, belt: 1.12, cabin: [-2.2, 1.25], pillarB: -0.3,
+    L: 4.75, W: 1.92, base: 2.85, tyre: 0.37, belt: 1.12, cabin: [-2.2, 1.25], pillarB: -0.3, doors: [1.22, -0.3, -1.45], tops: [1.25, 2.12, -2.6, -2.6],
     top: [[-2.38, 0.7], [-2.35, 1.1], [-2.28, 1.72], [0.55, 1.76], [1.3, 1.17], [2.1, 1.06], [2.36, 0.86], [2.38, 0.55]],
   },
   hatch: {
-    L: 4.3, W: 1.8, base: 2.65, tyre: 0.32, belt: 0.98, cabin: [-1.95, 0.95], pillarB: -0.4,
+    L: 4.3, W: 1.8, base: 2.65, tyre: 0.32, belt: 0.98, cabin: [-1.95, 0.95], pillarB: -0.4, doors: [0.95, -0.4, -1.35], tops: [0.95, 1.9, -2.6, -2.6],
     top: [[-2.15, 0.65], [-2.12, 1.0], [-1.95, 1.42], [0.2, 1.48], [0.95, 1.02], [1.85, 0.92], [2.12, 0.74], [2.15, 0.5]],
   },
 };
@@ -29,7 +29,7 @@ function profile(pts, z) {
 
 export function carGeoms(kind) {
   const K = KINDS[kind]; const hl = K.L / 2, hw0 = K.W / 2, yb = 0.24;
-  const NS = 44, NR = 20; // stations along the car, points around each section
+  const NS = 48, NR = 20; // stations along the car, points around each section (dense enough for a smooth A-pillar line)
   const P = [], rings = [];
   for (let s = 0; s < NS; s++) {
     const z = -hl + K.L * s / (NS - 1);
@@ -93,7 +93,7 @@ export function carGeoms(kind) {
   const tail = mergeGeoms([B(hw0 * 1.6, 0.1, 0.06, 0, tailY, rz)]);
   const plate = mergeGeoms([B(0.52, 0.13, 0.02, 0, yb + 0.15, hl + 0.035), B(0.52, 0.13, 0.02, 0, tailY - 0.2, -hl - 0.025)]);
   const wb = K.base / 2, wx = hw0 * 0.84;
-  return { body, glass, trim: trimAll, head, tail, plate, wheels: [[-wx, wb], [wx, wb], [-wx, -wb], [wx, -wb]], tyre: K.tyre, len: K.L, wid: K.W };
+  return { body, glass, trim: trimAll, head, tail, plate, wheels: [[-wx, wb], [wx, wb], [-wx, -wb], [wx, -wb]], tyre: K.tyre, len: K.L, wid: K.W, seams: { doors: K.doors, tops: K.tops, hl, yb, belt: K.belt } };
 }
 
 function mergeGeoms(list) {
@@ -102,22 +102,37 @@ function mergeGeoms(list) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.computeBoundingSphere(); return g;
 }
 
-// tyre with a rounded sidewall and tread (lathe profile), five-spoke alloy, dark brake disc; axis along x
-export function wheelGeoms(r) {
-  const w = 0.22, hw = w / 2, rr = r * 0.66; // rim radius
-  const prof = [[rr, -hw], [r - 0.035, -hw], [r - 0.008, -hw + 0.025], [r, -hw + 0.06], [r, hw - 0.06], [r - 0.008, hw - 0.025], [r - 0.035, hw], [rr, hw]].map(([a, b]) => new THREE.Vector2(a, b));
-  const tyre = new THREE.LatheGeometry(prof, 24); tyre.rotateZ(Math.PI / 2); // lathe axis y -> x
-  const parts = [];
-  const lip = new THREE.CylinderGeometry(rr, rr, w * 0.9, 24, 1, true); lip.rotateZ(Math.PI / 2); parts.push(lip);
-  for (const sx of [-1, 1]) {
-    const face = new THREE.CircleGeometry(rr * 0.98, 24); face.rotateY(sx * Math.PI / 2); face.translate(sx * hw * 0.55, 0, 0); // dark barrel face behind the spokes
-    void face;
-    for (let k = 0; k < 5; k++) { const sp = new THREE.BoxGeometry(0.03, rr * 0.92, 0.055); sp.translate(0, rr * 0.46, 0); sp.rotateX(k * Math.PI * 2 / 5); sp.translate(sx * hw * 0.82, 0, 0); parts.push(sp); }
-    const hub = new THREE.CylinderGeometry(0.06, 0.06, 0.04, 12); hub.rotateZ(Math.PI / 2); hub.translate(sx * hw * 0.85, 0, 0); parts.push(hub);
-  }
-  const rim = mergeGeoms(parts);
-  const discParts = [];
-  for (const sx of [-1, 1]) { const d = new THREE.CircleGeometry(rr * 0.97, 24); d.rotateY(sx * Math.PI / 2); d.translate(sx * hw * 0.6, 0, 0); discParts.push(d); }
-  const disc = mergeGeoms(discParts);
-  return { tyre: tyre.toNonIndexed(), rim, disc };
+// car paint over a clear coat: panel gaps (door, hood, boot and bumper shut lines drawn in car space, antialiased),
+// road grime sprayed on the lower body that also dulls the clear coat. One material per car kind (seam positions).
+export function carPaint(seams) {
+  const m = new THREE.MeshPhysicalMaterial({ roughness: 0.42, metalness: 0.3, clearcoat: 1.0, clearcoatRoughness: 0.07, envMapIntensity: 1.0 });
+  const U = { uDoors: { value: new THREE.Vector3(...seams.doors) }, uTops: { value: new THREE.Vector4(...seams.tops) }, uCar: { value: new THREE.Vector3(seams.hl, seams.yb, seams.belt) } };
+  m.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, U);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vCp; varying vec3 vCn;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvCp = position; vCn = normal;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+      uniform vec3 uDoors, uCar; uniform vec4 uTops; varying vec3 vCp; varying vec3 vCn; float cGap, cGrime;
+      float cl(float d){ float w = fwidth(d) * 1.2; return 1.0 - smoothstep(0.003, 0.003 + w, abs(d)); }
+      float ch(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+      float cn(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(ch(i), ch(i + vec3(1, 0, 0)), f.x), mix(ch(i + vec3(0, 1, 0)), ch(i + vec3(1, 1, 0)), f.x), f.y),
+                   mix(mix(ch(i + vec3(0, 0, 1)), ch(i + vec3(1, 0, 1)), f.x), mix(ch(i + vec3(0, 1, 1)), ch(i + vec3(1, 1, 1)), f.x), f.y), f.z); }`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+      { vec3 p = vCp, n = normalize(vCn); float side = smoothstep(0.5, 0.8, abs(n.x)), top = smoothstep(0.3, 0.6, n.y);
+        float band = step(uCar.y + 0.12, p.y) * step(p.y, uCar.z + 0.02); cGap = 0.0;
+        cGap = max(cGap, side * band * max(max(cl(p.z - uDoors.x), cl(p.z - uDoors.y)), cl(p.z - uDoors.z)));
+        cGap = max(cGap, side * band * cl(abs(p.z) - (uCar.x - 0.36)));                                     /* fender / bumper seams */
+        cGap = max(cGap, side * cl(p.y - (uCar.y + 0.17)) * step(uDoors.z, p.z) * step(p.z, uDoors.x));    /* door bottoms */
+        cGap = max(cGap, top * max(max(cl(p.z - uTops.x), cl(p.z - uTops.y)), max(cl(p.z - uTops.z), cl(p.z - uTops.w))));
+        float nz = cn(p * 3.0) * 0.6 + cn(p * 11.0) * 0.4;
+        cGrime = (1.0 - smoothstep(0.22, 0.75, p.y + 0.25 * (nz - 0.5))) * (0.55 + 0.45 * nz);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.075, 0.066, 0.055), cGrime * 0.75) * (1.0 - 0.9 * cGap); }`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      roughnessFactor = mix(roughnessFactor, 0.85, max(cGrime, cGap));`)
+      .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
+      material.clearcoat *= 1.0 - max(cGrime * 0.9, cGap);`);
+  };
+  m.customProgramCacheKey = () => 'carpaint';
+  return m;
 }
+

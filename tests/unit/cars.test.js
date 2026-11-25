@@ -1,6 +1,8 @@
 // Car geometry (src/cars.js): closed shells facing outward, tyres resting on the road, plausible dimensions.
 import { describe, it, expect } from 'vitest';
-import { carGeoms, wheelGeoms } from '../../src/cars.js';
+import { carGeoms } from '../../src/cars.js';
+import { tyreProfile } from '../../src/props.js';
+import { lathe } from '../../src/kit.js';
 
 const box = g => { const p = g.attributes.position.array; const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9]; for (let i = 0; i < p.length; i += 3) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], p[i + k]); hi[k] = Math.max(hi[k], p[i + k]); } return { lo, hi }; };
 
@@ -21,7 +23,7 @@ describe.each(['sedan', 'suv', 'hatch'])('%s', kind => {
   });
   it('tyres touch the road and do not sink into it', () => {
     // world.js places each wheel at y = tyre radius, scaling the unit wheel (radius 0.34) by tyre / 0.34
-    const w = box(wheelGeoms(0.34).tyre); const s = g.tyre / 0.34; const bottom = g.tyre + w.lo[1] * s;
+    const t = lathe(tyreProfile(0.34), 32); t.rotateY(Math.PI / 2); const w = box(t); const s = g.tyre / 0.34; const bottom = g.tyre + w.lo[1] * s;
     expect(Math.abs(bottom)).toBeLessThan(0.01);
   });
   it('body clears the ground (wheels show under the arches)', () => { expect(box(g.body).lo[1]).toBeGreaterThan(0.15); });

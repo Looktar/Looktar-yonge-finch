@@ -6,7 +6,8 @@ import { A, N } from './data_a.js';
 import { X } from './data_x.js';
 import { buildCity } from './buildings.js';
 import { groundMaterial, ribbonMaterial, tex as tex2 } from './pbr.js';
-import { carGeoms, wheelGeoms } from './cars.js';
+import { carGeoms, carPaint } from './cars.js';
+import { wheelKit, wheelKitLow } from './props.js';
 import { addStreetscape, cityTrees, parseX, nearestRoad } from './street.js';
 
 // ---------- helpers ----------
@@ -541,26 +542,22 @@ export function buildWorld(scene, tex, quality) {
   for (let i = 0; i < Math.min(4, bysd.length); i += 1) if (i !== 1) bysd[i].burn = true;
   // lofted procedural cars (src/cars.js): painted shell, glass, black trim + mirrors, lights; alloy wheels
   const KIND = ['sedan', 'suv', 'hatch'].map(k => ({ k, g: carGeoms(k) }));
-  const bodyMat = new THREE.MeshPhysicalMaterial({ roughness: 0.42, metalness: 0.3, clearcoat: 1.0, clearcoatRoughness: 0.07, envMapIntensity: 1.0 }); // painted metal under clear coat
   const glassMat = new THREE.MeshStandardMaterial({ color: 0x141b21, roughness: 0.04, metalness: 0.15, envMapIntensity: 1.6 });
   const trimMat = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.75 });
   const headMat = new THREE.MeshStandardMaterial({ color: 0xdfe6ee, emissive: 0xfff2dc, emissiveIntensity: 0.25, roughness: 0.2 });
   const hazMat = new THREE.MeshStandardMaterial({ color: 0x331a00, emissive: 0xff8a10, emissiveIntensity: 0 });
   const tailMat = new THREE.MeshStandardMaterial({ color: 0x3a0505, emissive: 0x700000, emissiveIntensity: 1 });
-  const tyreMat = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9, side: THREE.DoubleSide }), rimMat = new THREE.MeshStandardMaterial({ color: 0xb4b8bd, roughness: 0.28, metalness: 0.9 });
   cars.forEach(c => { const k = r(); c.kind = k < 0.45 ? 0 : k < 0.8 ? 1 : 2; });
-  const wg = wheelGeoms(0.34);
-  const tyres = new THREE.InstancedMesh(wg.tyre, tyreMat, cars.length * 4), rims = new THREE.InstancedMesh(wg.rim, rimMat, cars.length * 4), discs = new THREE.InstancedMesh(wg.disc, new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6, metalness: 0.6, side: THREE.DoubleSide }), cars.length * 4);
+  const wheelM = []; // wheel instance matrices, built per car below; the wheel itself is a Kit (props.js)
   const plateMat = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.4, map: (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 32; const g = c.getContext('2d'); g.fillStyle = '#f4f4f0'; g.fillRect(0, 0, 128, 32); g.fillStyle = '#1d3f8a'; g.font = 'bold 20px Arial'; g.textAlign = 'center'; g.fillText('CDXT 418', 64, 23); g.font = '6px Arial'; g.fillText('ONTARIO', 64, 7); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })() });
-  const meshes = [tyres, rims, discs];
+  const meshes = [];
   const hz = cars.filter(c => c.haz && !c.burn).length;
   const hazI = []; // collected per kind so main.js can flash them through hazMat
   const cc = new THREE.Color(), wm = new THREE.Matrix4(), ws = new THREE.Vector3(), wq = new THREE.Quaternion(), wv = new THREE.Vector3();
-  let iw = 0;
   KIND.forEach((K, ki) => {
     const mine = cars.filter(c => c.kind === ki); if (!mine.length) return;
     const n = mine.length, nh = mine.filter(c => c.haz && !c.burn).length;
-    const body = new THREE.InstancedMesh(K.g.body, bodyMat, n), glass = new THREE.InstancedMesh(K.g.glass, glassMat, n), trim = new THREE.InstancedMesh(K.g.trim, trimMat, n), head = new THREE.InstancedMesh(K.g.head, headMat, n), plate = new THREE.InstancedMesh(K.g.plate, plateMat, n);
+    const body = new THREE.InstancedMesh(K.g.body, carPaint(K.g.seams), n), glass = new THREE.InstancedMesh(K.g.glass, glassMat, n), trim = new THREE.InstancedMesh(K.g.trim, trimMat, n), head = new THREE.InstancedMesh(K.g.head, headMat, n), plate = new THREE.InstancedMesh(K.g.plate, plateMat, n);
     const tail = new THREE.InstancedMesh(K.g.tail, tailMat, Math.max(1, n - nh)), haz = new THREE.InstancedMesh(K.g.tail, hazMat, Math.max(1, nh));
     let it = 0, ih = 0;
     mine.forEach((c, i) => {
@@ -569,7 +566,7 @@ export function buildWorld(scene, tex, quality) {
       body.setColorAt(i, cc.set(c.burn ? '#0d0b0a' : c.c));
       if (c.haz && !c.burn) haz.setMatrixAt(ih++, m4); else tail.setMatrixAt(it++, m4);
       const sc = K.g.tyre / 0.34;
-      for (const [wx, wz] of K.g.wheels) { wm.compose(wv.set(wx, K.g.tyre, wz), wq.identity(), ws.set(1, sc, sc)); wm.premultiply(m4); tyres.setMatrixAt(iw, wm); discs.setMatrixAt(iw, wm); rims.setMatrixAt(iw++, wm); }
+      for (const [wx, wz] of K.g.wheels) { wm.compose(wv.set(wx, K.g.tyre, wz), wq.identity(), ws.set(1, sc, sc)); wm.premultiply(m4); wheelM.push(wm.clone()); }
       const ca = Math.cos(c.a), sa = Math.sin(c.a); const hw = K.g.wid / 2 + 0.05, hl = K.g.len / 2;
       const corner = (dx, dz) => [c.x + dx * ca + dz * sa, c.z - dx * sa + dz * ca];
       col.addPoly([corner(-hw, -hl), corner(hw, -hl), corner(hw, hl), corner(-hw, hl)]);
@@ -578,6 +575,20 @@ export function buildWorld(scene, tex, quality) {
     meshes.push(body, glass, trim, head, tail, haz, plate);
   });
   for (const m of meshes) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; scene.add(m); }
+  // wheels in two LODs; updateCarLOD() moves each car's wheels between them as the player walks (every ~0.5 s)
+  const wheelsNear = wheelKit(0.34).instancedMatrices(wheelM, 'wheels'), wheelsFar = wheelKitLow(0.34).instancedMatrices(wheelM, 'wheelsLow');
+  scene.add(wheelsNear, wheelsFar);
+  const wheelPos = wheelM.map(m => [m.elements[12], m.elements[14]]);
+  const updateCarLOD = (px, pz, near = 40) => {
+    let a = 0, b = 0; const n2 = near * near;
+    for (let i = 0; i < wheelM.length; i++) {
+      const d2 = (wheelPos[i][0] - px) ** 2 + (wheelPos[i][1] - pz) ** 2, grp = d2 < n2 ? wheelsNear : wheelsFar, k = d2 < n2 ? a++ : b++;
+      for (const im of grp.children) im.setMatrixAt(k, wheelM[i]);
+    }
+    for (const im of wheelsNear.children) { im.count = a; im.instanceMatrix.needsUpdate = true; }
+    for (const im of wheelsFar.children) { im.count = b; im.instanceMatrix.needsUpdate = true; }
+  };
+  updateCarLOD(START[0], START[1]);
   void hz;
   const fires = cars.filter(c => c.burn).map(c => ({ x: c.x, z: c.z }));
 
@@ -629,6 +640,6 @@ export function buildWorld(scene, tex, quality) {
   const named = []; for (const rd of roads) if (rd.name && rd.name !== 'Finch Bus Terminal') for (let i = 0; i < rd.p.length - 1; i++) named.push([rd.p[i][0], rd.p[i][1], rd.p[i + 1][0], rd.p[i + 1][1], rd.name]);
 
   const stats = { buildings: bl.length, heights: bl.stats, realTrees, fillTrees: trees.length - realTrees, detail: city.detail };
-  return { stats, col, lamps, fires, bmat, signalMat, hazMat, headsFl, poolFlMat, minimap: mm, mmS, named, cars, roads, onRoad };
+  return { stats, col, lamps, fires, bmat, signalMat, hazMat, headsFl, poolFlMat, minimap: mm, mmS, named, cars, roads, onRoad, updateCarLOD };
 }
 
