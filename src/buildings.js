@@ -358,7 +358,7 @@ export function facadeMaterial() {
         if (!shop) lc = mix(lc, vec3(0.82, 0.88, 1.0), step(0.78, hs2)); /* some rooms lit by cool LED / TV light */
         float detail = shop ? smoothstep(0.35, 1.0, max(dF.x, dF.y) / 2.0) : smoothstep(0.35, 1.0, max(dg.x, dg.y));
         float tinted = (st == 4 || st == 6 || st == 5 || st == 16) ? 1.0 : 0.0;
-        vec3 room = vec3(0.0);
+        vec3 room = vec3(0.0); float rev = 0.0;
         if (win > 0.001 && abs(vWN.y) < 0.5 && detail < 0.999) {
           vec3 Nw = normalize(vWN); vec3 Tw = vec3(-Nw.z, 0.0, Nw.x);
           vec3 V = normalize(vWP - cameraPosition);
@@ -367,6 +367,10 @@ export function facadeMaterial() {
           vec2 lp = shop ? vec2(fract(F.x / 7.5) * 7.5, F.y) : fract(g) * cs;
           float D = shop ? 10.0 : max(3.4, bw * 1.15);
           vec3 tt = (step(0.0, d) * vec3(cs, D) - vec3(lp, 0.0)) / d;
+          if (st == 3 && !shop) { /* precast condo: the glass sits 22 cm behind the face; where the ray meets the opening's sides, show the concrete reveal */
+            vec2 sp = lp + d.xy * (0.22 / max(d.z, 0.05));
+            rev = clamp(step(sp.x, 0.035 * cs.x) + step(0.965 * cs.x, sp.x) + step(sp.y, 0.13 * cs.y) + step(cs.y, sp.y), 0.0, 1.0) * (1.0 - detail);
+          }
           float t = min(min(tt.x, tt.y), tt.z);
           vec3 hp = vec3(lp, 0.0) + d * t;
           float rr = h21(cell + seed * 2.7), r2 = h21(cell * 1.3 + seed * 4.1);
@@ -395,6 +399,7 @@ export function facadeMaterial() {
           }
         }
         room = mix(room, lc * litF * 0.45, detail);
+        win *= 1.0 - rev; alb *= 1.0 - 0.45 * rev; /* reveal in shadow */
         vec3 trans = mix(vec3(0.92), tint * 3.0 + 0.04, tinted * 0.85);
         alb = mix(alb, tint * mix(0.12, 1.25, tinted * (st == 6 ? 1.0 : 0.6)), win); /* reflective coatings: the metal colour tints the reflection */
         rgh = mix(rgh, 0.03 + 0.04 * hs2 * (1.0 - detail), win);
