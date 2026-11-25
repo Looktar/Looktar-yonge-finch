@@ -333,20 +333,32 @@ function buildGround(tex, roadMat, mask) {
 }
 
 // ---------- props ----------
+// fractal twig silhouette on a transparent card (drawn once): fine branches fanning up from the bottom centre
+function twigTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); const r = rng(77);
+  g.strokeStyle = '#ffffff'; g.lineCap = 'round';
+  const br = (x, y, a, len, w, d) => { if (d === 0 || len < 3) return; const x2 = x + Math.cos(a) * len, y2 = y - Math.sin(a) * len; g.lineWidth = w; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo((x + x2) / 2 + (r() - 0.5) * len * 0.3, (y + y2) / 2, x2, y2); g.stroke();
+    const n = 2 + Math.floor(r() * 2); for (let i = 0; i < n; i++) br(x + (x2 - x) * (0.4 + 0.6 * r()), y + (y2 - y) * (0.4 + 0.6 * r()), a + (r() - 0.5) * 1.3, len * (0.55 + r() * 0.2), Math.max(0.6, w * 0.62), d - 1); };
+  for (let k = 0; k < 5; k++) br(128 + (r() - 0.5) * 40, 250, Math.PI / 2 + (r() - 0.5) * 1.1, 70 + r() * 30, 2.2, 6);
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+}
 function treeGeoms() {
   const bark = [];
   const mk = (r0, r1, h, x, y, z, rx, rz) => { const g = new THREE.CylinderGeometry(r1, r0, h, 5, 1); g.translate(0, h / 2, 0); g.rotateX(rx); g.rotateZ(rz); g.translate(x, y, z); return g; };
   // bare late-November street trees (maple / honey locust / linden): recursive limbs that taper, fork and droop
   const variants = []; const up = new THREE.Vector3(0, 1, 0), qq = new THREE.Quaternion();
   const seg = (a, b, r0, r1, sides) => { const d = new THREE.Vector3().subVectors(b, a); const L = d.length(); const g = new THREE.CylinderGeometry(r1, r0, L, sides, 1, true); g.translate(0, L / 2, 0); qq.setFromUnitVectors(up, d.normalize()); g.applyQuaternion(qq); g.translate(a.x, a.y, a.z); return g.toNonIndexed(); };
+  const twigs = [];
   for (let v = 0; v < 4; v++) {
-    const r = rng(500 + v); const parts = [];
+    const r = rng(500 + v); const parts = [], cards = [];
+    // a crossed pair of alpha-tested twig cards at each fine-twig end: the hazy crown of a bare tree
+    const card = (at, dir) => { const sz = 1.1 + r() * 0.7; for (const rot of [0, Math.PI / 2]) { const g = new THREE.PlaneGeometry(sz, sz); g.translate(0, sz * 0.42, 0); g.rotateY(rot + r()); qq.setFromUnitVectors(up, dir.clone().lerp(up, 0.4).normalize()); g.applyQuaternion(qq); g.translate(at.x, at.y, at.z); cards.push(g); } };
     const grow = (a, dir, len, rad, depth) => {
       // two slightly bent segments per limb
       const mid = a.clone().addScaledVector(dir, len * 0.5); const bend = dir.clone().add(new THREE.Vector3(r() - 0.5, (r() - 0.5) * 0.3, r() - 0.5).multiplyScalar(0.35)).normalize();
       const end = mid.clone().addScaledVector(bend, len * 0.5);
       parts.push(seg(a, mid, rad, rad * 0.82, depth > 1 ? 5 : 3), seg(mid, end, rad * 0.82, rad * 0.62, depth > 1 ? 5 : 3));
-      if (depth === 0) return;
+      if (depth === 0) { card(mid, bend); return; }
       const n = depth === 3 ? 4 + Math.floor(r() * 2) : 2 + Math.floor(r() * 2);
       for (let i = 0; i < n; i++) {
         const t = depth === 3 ? 0.55 + 0.45 * i / n : 0.45 + r() * 0.55; const at = a.clone().lerp(end, t);
@@ -358,15 +370,16 @@ function treeGeoms() {
     };
     const h0 = 2.2 + r() * 0.8;
     grow(new THREE.Vector3(0, 0, 0), new THREE.Vector3((r() - 0.5) * 0.08, 1, (r() - 0.5) * 0.08).normalize(), h0 * 1.6, 0.2 + r() * 0.05, 3);
-    variants.push(mergeGeometries(parts));
+    variants.push(mergeGeometries(parts)); twigs.push(mergeGeometries(cards));
   }
   const ever = mergeGeometries([new THREE.CylinderGeometry(0.12, 0.16, 1.4, 5).translate(0, 0.7, 0), new THREE.ConeGeometry(1.9, 3.2, 7).translate(0, 2.6, 0), new THREE.ConeGeometry(1.5, 2.8, 7).translate(0, 4.0, 0), new THREE.ConeGeometry(1.0, 2.4, 7).translate(0, 5.3, 0)].map(g => g.toNonIndexed()));
-  return { variants, ever };
+  return { variants, ever, twigs, twigTex: twigTexture() };
 }
 
+const placeRng = rng(4242);
 function placeAlong(roads, step, offsetFn, filter, cb) {
   for (const r of roads) {
-    if (!filter(r)) continue; let acc = step * 0.5 * Math.random();
+    if (!filter(r)) continue; let acc = step * 0.5 * placeRng(); /* seeded: the same layout every load */
     for (let i = 0; i < r.p.length - 1; i++) {
       const a = r.p[i], b = r.p[i + 1]; const dx = b[0] - a[0], dz = b[1] - a[1]; const L = Math.hypot(dx, dz); if (L < 0.1) continue;
       const ux = dx / L, uz = dz / L, nx = -uz, nz = ux;
@@ -603,11 +616,14 @@ export function buildWorld(scene, tex, quality) {
     if (bnear && !rnear) trees.push([x, z, 0.8 + r() * 0.5, r() < 0.25 ? 1 : 0]);
   }
   const tg = treeGeoms(); const barkMat = new THREE.MeshStandardMaterial({ color: 0x4b4239, roughness: 0.95 }); const everMat = new THREE.MeshStandardMaterial({ color: 0x1a2a1c, roughness: 0.9 });
+  const twigMat = new THREE.MeshStandardMaterial({ color: 0x3e362f, roughness: 0.95, alphaMap: tg.twigTex, alphaTest: 0.35, side: THREE.DoubleSide }); /* fine twigs, no shadow casting (cheap) */
   const groups = [[], [], [], []]; for (const t of trees) groups[t[3] ? 3 : Math.floor(r() * 3)].push(t);
   groups.forEach((gr, gi) => {
     if (!gr.length) return; const im = new THREE.InstancedMesh(gi === 3 ? tg.ever : tg.variants[gi], gi === 3 ? everMat : barkMat, gr.length);
-    gr.forEach((t, i) => { e.set(0, r() * 6.28, 0); q.setFromEuler(e); const sc = t[2]; m4.compose(v.set(t[0], 0, t[1]), q, new THREE.Vector3(sc, sc * (0.9 + r() * 0.3), sc)); im.setMatrixAt(i, m4); });
+    const tw = gi === 3 ? null : new THREE.InstancedMesh(tg.twigs[gi], twigMat, gr.length);
+    gr.forEach((t, i) => { e.set(0, r() * 6.28, 0); q.setFromEuler(e); const sc = t[2]; m4.compose(v.set(t[0], 0, t[1]), q, new THREE.Vector3(sc, sc * (0.9 + r() * 0.3), sc)); im.setMatrixAt(i, m4); if (tw) tw.setMatrixAt(i, m4); });
     im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; scene.add(im);
+    if (tw) { tw.instanceMatrix.needsUpdate = true; tw.frustumCulled = false; tw.receiveShadow = true; scene.add(tw); }
   });
   for (const t of trees) col.addPoly([[t[0] - 0.25, t[1] - 0.25], [t[0] + 0.25, t[1] - 0.25], [t[0] + 0.25, t[1] + 0.25], [t[0] - 0.25, t[1] + 0.25]], false);
 
