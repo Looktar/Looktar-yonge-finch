@@ -1,7 +1,7 @@
 // Street props as Saltline-style part lists (see kit.js / surf.js). Every builder returns a Kit centred on its
 // footprint with y = 0 on the pavement; street.js instances them along the roads (one InstancedMesh per material).
 import * as THREE from 'three';
-import { Kit, chamferBox, lathe, sectionExtrude, tube, polygon } from './kit.js';
+import { Kit, chamferBox, lathe, sectionExtrude, sideExtrude, tube, polygon } from './kit.js';
 import { kitMaterial } from './surf.js';
 
 let M = null;
@@ -22,6 +22,9 @@ function mats() {
     blue: kitMaterial('paint', { color: 0x1f4f9a, scale: 3, wear: 0.6, wearColor: 0xc0c4c8, wearRough: 0.4, wearMetal: 0 }),
     yellow: new THREE.MeshStandardMaterial({ color: 0xffc21a, roughness: 0.35, emissive: 0x3a2600 }), // retro-reflector
     glass: new THREE.MeshStandardMaterial({ color: 0x1a2226, roughness: 0.08, metalness: 0.2, envMapIntensity: 1.4 }),
+    galv: kitMaterial('galv', { scale: 2.2, wear: 0.3, wearColor: 0x6f6a62, wearRough: 0.7, wearMetal: 0.4, ground: 0.25 }),
+    signal: kitMaterial('poly', { color: 0xe8b400, scale: 4, normal: 0.2, wear: 0.3, wearColor: 0x8a7a40, wearRough: 0.6, wearMetal: 0 }),
+    lumi: kitMaterial('satin', { color: 0x6c7074, scale: 4, wear: 0.4 }),
   };
   return M;
 }
@@ -169,4 +172,41 @@ export function wheelKitLow(r = 0.34) {
   for (const s of [1, -1]) k.add(lathe([[0, 0], [rr, 0], [rr, 0.01]], 12), m.alloy, { at: [s * hw * 0.8, 0, 0], rot: X(-s) });
   return k;
 }
+
+// ---- Toronto arterial street light: tapered octagonal galvanised pole, base cover, hand-hole, davit arm, LED head.
+// The lens is not part of the kit (it is lit or not per lamp, see world.js); it sits at (0, 7.36, 1.75) facing down.
+export function lampKit() {
+  const m = mats(), k = new Kit();
+  k.add(chamferBox(0.36, 0.14, 0.36, 0.02), m.galv, { at: [0, 0.07, 0] }); // base cover
+  for (const [x, z] of [[-0.12, -0.12], [0.12, -0.12], [-0.12, 0.12], [0.12, 0.12]]) k.add(lathe([[0.018, 0], [0.018, 0.03], [0, 0.034]], 6), m.galv, { at: [x, 0.14, z], rot: UP });
+  k.add(lathe([[0.125, 0.14], [0.115, 0.2], [0.11, 0.22], [0.065, 7.3], [0.06, 7.34], [0, 7.36]], 8), m.galv, { rot: UP }); // octagonal shaft
+  k.add(chamferBox(0.09, 0.22, 0.02, 0.006), m.galv, { at: [0, 0.6, 0.112] }); // hand-hole cover
+  for (const y of [0.53, 0.67]) k.add(lathe([[0.007, 0], [0.007, 0.006], [0, 0.007]], 6), m.galv, { at: [0, y, 0.122], rot: [0, 0, 0] });
+  k.add(tube([[0, 6.9, 0.0], [0, 7.32, 0.35], [0, 7.5, 0.9], [0, 7.5, 1.45]], 0.042, 8, 20), m.galv); // davit arm
+  k.add(sideExtrude([[1.4, 0.0], [2.05, 0.02], [2.08, 0.05], [2.0, 0.1], [1.45, 0.12], [1.38, 0.08]].map(([u, v]) => [u, v]), 0.32, 0.015), m.lumi, { at: [0, 7.37, 0], rot: [0, Math.PI, 0] }); // LED head shell
+  k.add(chamferBox(0.2, 0.05, 0.12, 0.01), m.lumi, { at: [0, 7.47, 1.42] }); // slip-fitter
+  return k;
+}
+export const LAMP_LENS = () => { const g = new THREE.BoxGeometry(0.24, 0.02, 0.5); g.translate(0, 7.365, 1.75); return g; };
+
+// ---- signal pole with mast arm and two Toronto yellow 3-section heads (lit lens comes from world.js) ----
+export function signalKit() {
+  const m = mats(), k = new Kit();
+  k.add(chamferBox(0.42, 0.12, 0.42, 0.02), m.galv, { at: [0, 0.06, 0] });
+  k.add(lathe([[0.14, 0.12], [0.13, 0.2], [0.1, 6.05], [0, 6.08]], 8), m.galv, { rot: UP });
+  k.add(tube([[0, 5.9, 0.0], [0, 5.98, 2.0], [0, 6.02, 4.0], [0, 6.02, 6.0]], 0.055, 8, 16), m.galv); // mast arm
+  k.add(lathe([[0, 6.0], [0.05, 6.0], [0.05, 6.04], [0, 6.06]], 8), m.galv, { at: [0, 0, 6.0], rot: [0, 0, 0] }); // arm end cap
+  k.add(chamferBox(0.16, 0.22, 0.2, 0.02), m.galv, { at: [0, 5.92, 0.12] }); // arm clamp
+  const hood = sectionExtrude([[-0.15, -0.13], [-0.15, 0.14], [0.15, 0.14], [0.15, -0.13], [0.135, -0.13], [0.135, 0.125], [-0.135, 0.125], [-0.135, -0.13]], 0, 0.24, 0.004);
+  for (const zc of [4.6, 2.4]) {
+    k.add(chamferBox(0.26, 1.08, 0.36, 0.03), m.signal, { at: [0, 5.3, zc] }); // front face at x = 0.13
+    k.add(chamferBox(0.06, 0.32, 0.06, 0.01), m.galv, { at: [0, 6.0, zc] }); // hanger
+    for (const y of [5.65, 5.3, 4.95]) {
+      k.add(hood, m.signal, { at: [0.128, y, zc], rot: [0, -Math.PI / 2, 0] }); // visor, opening toward the traffic (+x)
+      k.add(lathe([[0.118, 0], [0.122, 0.008], [0.112, 0.016], [0, 0.016]], 16), m.hole, { at: [0.13, y, zc], rot: [0, -Math.PI / 2, 0], edge: 0 }); // dark lens bezel, face outward
+    }
+  }
+  return k;
+}
+export const SIGNAL_LENSES = () => [4.6, 2.4].map(zc => { const g = new THREE.CircleGeometry(0.1, 16); g.rotateY(Math.PI / 2); g.translate(0.149, 5.65, zc); return g; });
 
