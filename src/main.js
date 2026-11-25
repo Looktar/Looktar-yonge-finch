@@ -450,6 +450,7 @@ const fwd = new THREE.Vector3(), tmp = { x: 0, z: 0 };
 function update(dt) {
   if (S.hitStop > 0) { S.hitStop -= dt; dt *= 0.15; } // a few frames of hit-stop on kills
   S.time += dt;
+  S.lodT = (S.lodT || 0) - dt; if (S.lodT <= 0 && W.updateCarLOD) { S.lodT = 0.5; W.updateCarLOD(player.x, player.z); } /* near cars get the detailed wheels */
   // --- player movement ---
   const sprint = (keys.ShiftLeft || keys.ShiftRight || (TC && TC.move.sprint)) && S.stamina > 0.05;
   let mx = 0, mz = 0; if (keys.KeyW || keys.ArrowUp) mz -= 1; if (keys.KeyS || keys.ArrowDown) mz += 1; if (keys.KeyA) mx -= 1; if (keys.KeyD) mx += 1;

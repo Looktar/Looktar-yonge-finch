@@ -123,3 +123,50 @@ export function newsboxKit() {
   return k;
 }
 export { polygon };
+
+// ---- car wheel, axis along X, centred: tyre with bulged sidewalls and tread grooves, painted alloy with five double
+// spokes, lip, centre cap and lug nuts on both faces, brake disc and caliper behind ----
+let WM = null;
+function wheelMats() {
+  if (WM) return WM;
+  WM = {
+    tyre: kitMaterial('rubber', { scale: 8, wear: 0, normal: 0.6 }),
+    alloy: kitMaterial('satin', { color: 0xa9aeb2, scale: 9, wear: 0.12, wearColor: 0x3a3632, wearRough: 0.8, wearMetal: 0 }),
+    dark: kitMaterial('park', { scale: 9, wear: 0.4, normal: 0.3 }),
+    caliper: kitMaterial('satin', { color: 0x2a2a2c, scale: 9, wear: 0.3 }),
+    hole: mats().hole,
+  };
+  return WM;
+}
+// tyre cross-section [radius, axial] with bulged sidewalls; the tread is at exactly r
+export function tyreProfile(r = 0.34, hw = 0.11) { const rr = r * 0.64; return [[rr + 0.012, -hw + 0.008], [r - 0.045, -hw], [r - 0.012, -hw + 0.028], [r, -hw + 0.07], [r, hw - 0.07], [r - 0.012, hw - 0.028], [r - 0.045, hw], [rr + 0.012, hw - 0.008]]; }
+export function wheelKit(r = 0.34) {
+  const m = wheelMats(), k = new Kit(), hw = 0.11, rr = r * 0.64;
+  const X = s => [0, s * Math.PI / 2, 0]; // lathe -Z -> -X (s = 1) or +X (s = -1)
+  k.add(lathe(tyreProfile(r), 20), m.tyre, { rot: X(1) });
+  k.add(lathe([[r + 0.0012, -0.008], [r + 0.0012, 0.008]], 20), m.hole, { rot: X(1), edge: 0 }); // centre tread groove
+  k.add(lathe([[rr - 0.004, -hw * 0.9], [rr - 0.004, hw * 0.9]], 16), m.dark, { rot: X(1), ao: 0.4 }); // barrel
+  k.add(lathe([[0, -0.03], [rr * 0.82, -0.03], [rr * 0.82, 0.03], [0, 0.03]], 16), m.dark, { rot: X(1), ao: 0.5 }); // brake disc
+  k.add(chamferBox(0.07, 0.11, 0.09, 0.012), m.caliper, { at: [0, rr * 0.55, -rr * 0.45], rot: [0.7, 0, 0], ao: 0.6 });
+  for (const s of [1, -1]) {
+    const fx = s * hw * 0.72;
+    k.add(lathe([[rr - 0.012, 0], [rr + 0.014, 0.004], [rr + 0.014, 0.014], [rr - 0.004, 0.02]], 20), m.alloy, { at: [fx, 0, 0], rot: X(-s) }); // lip
+    for (let i = 0; i < 5; i++) for (const d of [-0.11, 0.11]) {
+      const a = i / 5 * Math.PI * 2 + d;
+      k.add(chamferBox(0.028, rr * 0.8, 0.026, 0.006), m.alloy, { at: [fx - s * 0.006, Math.cos(a) * rr * 0.5, Math.sin(a) * rr * 0.5], rot: [a, 0, 0] });
+    }
+    k.add(lathe([[0, 0], [0.072, 0], [0.078, 0.012], [0.06, 0.024], [0, 0.026]], 12), m.alloy, { at: [fx - s * 0.012, 0, 0], rot: X(-s) }); // hub
+    k.add(lathe([[0, 0], [0.032, 0], [0.032, 0.008], [0, 0.01]], 16), m.dark, { at: [fx + s * 0.013, 0, 0], rot: X(-s) }); // centre cap
+    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2 + 0.6; k.add(lathe([[0.0085, 0], [0.0085, 0.016], [0, 0.018]], 6), m.dark, { at: [fx + s * 0.008, Math.cos(a) * 0.05, Math.sin(a) * 0.05], rot: X(-s) }); }
+  }
+  return k;
+}
+
+// far LOD of the wheel (Saltline re-runs its builders with small parts dropped): tyre + a flat painted wheel face
+export function wheelKitLow(r = 0.34) {
+  const m = wheelMats(), k = new Kit(), hw = 0.11, rr = r * 0.64; const X = s => [0, s * Math.PI / 2, 0];
+  k.add(lathe([[rr, -hw], [r - 0.03, -hw], [r, -hw + 0.05], [r, hw - 0.05], [r - 0.03, hw], [rr, hw]], 12), m.tyre, { rot: X(1) });
+  for (const s of [1, -1]) k.add(lathe([[0, 0], [rr, 0], [rr, 0.01]], 12), m.alloy, { at: [s * hw * 0.8, 0, 0], rot: X(-s) });
+  return k;
+}
+

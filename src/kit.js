@@ -123,6 +123,15 @@ export class Kit {
     }
     return grp;
   }
+  // same, from ready-made instance matrices (wheels follow their car)
+  instancedMatrices(matrices, name = 'props') {
+    const grp = new THREE.Group(); grp.name = name; if (!matrices.length) return grp;
+    for (const [mat, gs] of this.buckets) {
+      const im = new THREE.InstancedMesh(mergeGeometries(gs), mat, matrices.length);
+      matrices.forEach((m, i) => im.setMatrixAt(i, m)); im.instanceMatrix.needsUpdate = true; im.castShadow = im.receiveShadow = true; im.frustumCulled = false; grp.add(im);
+    }
+    return grp;
+  }
   get parts() { let n = 0; for (const gs of this.buckets.values()) n += gs.length; return n; }
 }
 
