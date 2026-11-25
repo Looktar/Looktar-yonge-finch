@@ -27,12 +27,12 @@ float scratches(vec2 uv, float P, float w){ vec2 p = uv * P, i = floor(p); float
 // family: out alb (linear), tint (1 = takes the material colour), ao, rough, metal, h (0..1)
 const FAMILIES = {
   // black anodised aluminium / cerakote on receivers and rails: mottled near-black, fine grain, light scratches
-  anod: `float m = fbm(uv, 4.0, 5), g = vn(uv, 160.0), sc = scratches(uv, 9.0, 0.03);
-    alb = vec3(0.028, 0.029, 0.031) * (0.8 + 0.45 * m) + sc * 0.05; tint = 0.0; ao = 1.0;
+  anod: `float m = fbm(uv, 4.0, 5), g = vn(uv, 160.0), sc = scratches(uv, 9.0, 0.018) * (0.4 + 0.6 * vn(uv, 6.0));
+    alb = vec3(0.028, 0.029, 0.031) * (0.8 + 0.45 * m) + sc * 0.018; tint = 0.0; ao = 1.0;
     rough = 0.47 + 0.12 * (m - 0.5) + 0.08 * (g - 0.5) - sc * 0.2; metal = 0.22; /* anodising / cerakote: a satin, mostly dielectric coat */ h = 0.5 + 0.25 * (g - 0.5) - sc * 0.25;`,
   // parkerised / nitrided steel: barrel, pins, screws
   park: `float m = fbm(uv, 6.0, 5), g = vn(uv, 220.0), sc = scratches(uv, 7.0, 0.025);
-    alb = vec3(0.04, 0.041, 0.04) * (0.75 + 0.5 * m) + sc * 0.08; tint = 0.0; ao = 1.0;
+    alb = vec3(0.04, 0.041, 0.04) * (0.75 + 0.5 * m) + sc * 0.03; tint = 0.0; ao = 1.0;
     rough = 0.47 + 0.12 * (m - 0.5) - sc * 0.25; metal = 0.75; h = 0.5 + 0.35 * (g - 0.5) - sc * 0.2;`,
   // textured polymer (grip, magazine, stock): stipple dots, takes the material colour
   poly: `vec2 v = vor(uv, 48.0); float st = 1.0 - smoothstep(0.15, 0.45, v.x), m = fbm(uv, 5.0, 4);

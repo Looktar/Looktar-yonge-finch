@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { Kit, ensureKit, chamferBox, lathe, sideExtrude, sectionExtrude, tube, roundRect, bez, polygon } from './kit.js';
+import { Kit, ensureKit, loft, chamferBox, lathe, sideExtrude, sectionExtrude, tube, roundRect, bez, polygon } from './kit.js';
 import { kitMaterial } from './surf.js';
 
 // Viewmodels built from real-proportion side profiles, extruded with bevels.
@@ -73,19 +73,27 @@ function wetGun(mat, size = 140) {
 }
 
 // ---------- hands ----------
-function hand(side, curl = 1, gloveMat = null) { // fist shape around a vertical grip, palm facing -x for right hand
-  const m = Object.assign({}, mats()); if (gloveMat) m.glove = gloveMat; const g = new THREE.Group();
-  const palm = new THREE.Mesh(new RoundedBoxGeometry(0.03, 0.085, 0.075, 3, 0.012), m.glove); g.add(palm);
-  for (let i = 0; i < 4; i++) { // fingers wrap around the front of the grip
-    const f = new THREE.Group(); f.position.set(-side * 0.004, 0.03 - i * 0.021, -0.036);
-    const a = new THREE.Mesh(new THREE.CapsuleGeometry(0.0095, 0.022, 4, 8), m.glove); a.rotation.z = Math.PI / 2; a.position.x = -side * 0.016; f.add(a);
-    const b = new THREE.Mesh(new THREE.CapsuleGeometry(0.0088, 0.018, 4, 8), m.glove); b.rotation.x = Math.PI / 2; b.position.set(-side * 0.036, 0, 0.012 * curl); f.add(b);
-    const k = new THREE.Mesh(new RoundedBoxGeometry(0.012, 0.016, 0.01, 2, 0.003), m.knuckle); k.position.set(-side * 0.002, 0, -0.004); f.add(k);
-    g.add(f);
+// gloved fist built from lofts (Saltline's way): pillow palm, four fingers wrapping a vertical grip phalanx by
+// phalanx, thumb over the index finger, rubber knuckle guards, cuff with a hook-and-loop strap.
+// Same local frame as before: grip along y, palm on the +x side (right hand), fingers curl across -z.
+function kitHand(side, curl = 1) {
+  const K = kmats(), k = new Kit(), sx = side;
+  // palm: a flattened loft from the wrist (+z, low) to the knuckle line (-z)
+  k.add(loft([[sx * 0.003, -0.012, 0.034], [sx * 0.004, -0.004, 0.012], [sx * 0.003, 0.0, -0.012], [sx * 0.001, 0.0, -0.03]], [[0.016, 0.034], [0.017, 0.042], [0.016, 0.044], [0.014, 0.042]], 14, { up: [1, 0, 0] }), K.glove);
+  // fingers: index (top) to little (bottom); each wraps around the grip in front of the palm
+  const fy = [0.03, 0.01, -0.01, -0.03], fr = [0.0098, 0.0102, 0.0096, 0.0086], fl = [1, 1.06, 1.0, 0.86];
+  for (let i = 0; i < 4; i++) {
+    const y = fy[i], r = fr[i], L = fl[i] * (0.85 + 0.15 * curl);
+    const path = [[sx * 0.002, y, -0.03], [-sx * 0.012 * L, y + 0.001, -0.046], [-sx * 0.03 * L, y, -0.046 * (0.7 + 0.3 * L)], [-sx * 0.041 * L, y - 0.001, -0.03 * L], [-sx * 0.043 * L, y - 0.002, -0.013 * L]];
+    k.add(loft(path, [[r, r * 0.92], [r * 0.98, r * 0.9], [r * 0.92, r * 0.86], [r * 0.86, r * 0.8], [r * 0.8, r * 0.74]], 10, { up: [0, 1, 0] }), K.glove);
+    k.add(chamferBox(0.008, 0.013, 0.012, 0.003), K.rub, { at: [sx * 0.012, y, -0.036], rot: [0, -sx * 0.5, 0], ao: 0.9 }); // knuckle guard
   }
-  const th = new THREE.Mesh(new THREE.CapsuleGeometry(0.01, 0.035, 4, 8), m.glove); th.position.set(-side * 0.03, 0.04, -0.01); th.rotation.set(0.4, 0, side * 0.9); g.add(th);
-  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.032, 0.04, 12), m.glove); cuff.position.set(side * 0.004, -0.06, 0.01); g.add(cuff);
-  g.traverse(o => o.frustumCulled = false); return g;
+  // thumb: from the side of the palm, over the index finger
+  k.add(loft([[-sx * 0.006, 0.03, 0.012], [-sx * 0.016, 0.044, -0.004], [-sx * 0.03, 0.05, -0.02], [-sx * 0.042, 0.047, -0.03]], [[0.013, 0.012], [0.011, 0.0105], [0.0098, 0.0092], [0.0088, 0.0082]], 10, { up: [0, 0, 1] }), K.glove);
+  // cuff and strap
+  k.add(loft([[sx * 0.004, -0.03, 0.04], [sx * 0.004, -0.05, 0.035], [sx * 0.004, -0.075, 0.03]], [[0.022, 0.03], [0.024, 0.031], [0.025, 0.032]], 14, { up: [1, 0, 0], caps: false }), K.glove);
+  k.add(chamferBox(0.052, 0.014, 0.064, 0.004), K.rub, { at: [sx * 0.004, -0.046, 0.036], rot: [0.1, 0, 0], ao: 0.85 });
+  return k.build('hand');
 }
 function forearm(from, to, mat = null) { // sleeve from wrist (from) to elbow (to)
   const m = Object.assign({}, mats()); if (mat) m.sleeve = mat; const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to); const L = a.distanceTo(b);
@@ -107,7 +115,7 @@ function kmats() {
     rub: kitMaterial('rubber', { scale: 10, wear: 0 }),
     hole: new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.9, metalness: 0 }), // fake recesses
     glove: kitMaterial('cloth', { color: 0x24251f, scale: 14, wear: 0, normal: 0.8 }),
-    sleeve: kitMaterial('cloth', { color: 0x33352b, scale: 9, wear: 0, normal: 0.6 }),
+    sleeve: kitMaterial('cloth', { color: 0x2a2c24, scale: 9, wear: 0, normal: 0.6 }),
     lens: new THREE.MeshStandardMaterial({ color: 0xc9d2d6, roughness: 0.15, metalness: 0.2, emissive: 0x1a1d1f }),
   };
   return KM;
@@ -194,8 +202,8 @@ export function buildRifle() {
   const ret = new THREE.Mesh(new THREE.PlaneGeometry(0.0045, 0.0045), new THREE.MeshBasicMaterial({ map: RET, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
   ret.position.set(0, dotV + 0.004, -0.16); g.add(ret);
   // hands & sleeves
-  const rh = hand(1, 1, K.glove); rh.position.set(0.0, -0.075, -0.0); rh.rotation.set(-0.42, 0, 0); g.add(rh);
-  const lh = hand(-1, 0.9, K.glove); lh.position.set(-0.04, -0.012, -0.36); lh.rotation.set(Math.PI / 2, 0, -0.35); g.add(lh);
+  const rh = kitHand(1, 1); rh.position.set(0.019, -0.074, 0.016); rh.rotation.set(-0.4, 0, 0); g.add(rh); // finger wrap centred on the grip
+  const lh = kitHand(-1, 0.95); lh.position.set(-0.012, -0.016, -0.36); lh.rotation.set(Math.PI / 2, 0, -0.55); g.add(lh); // wraps the handguard from below, fingers up the right side
   g.add(forearm([0.02, -0.13, 0.03], [0.1, -0.26, 0.26], K.sleeve));
   g.add(forearm([-0.05, -0.03, -0.29], [-0.2, -0.24, -0.02], K.sleeve));
   g.traverse(o => o.frustumCulled = false);
@@ -214,11 +222,12 @@ export function buildShotgun() {
   g.add(M([prof([[0.0, 0.03], [-0.31, 0.022], [-0.32, 0.015], [-0.32, -0.095], [-0.305, -0.103], [-0.11, -0.056], [-0.05, -0.048], [0.0, -0.03]], 0.036, 0.006)], m.wood));
   g.add(M([boxU(0.04, 0.1, -0.335, -0.318, -0.015, 0, 0.004)], m.rubber));
   g.add(M([prof([[0.035, -0.03], [0.1, -0.03], [0.1, -0.05], [0.04, -0.052], [0.035, -0.045]], 0.012, 0.0015, [roundRect(0.043, -0.047, 0.094, -0.033, 0.004)])], m.metal));
-  const rh = hand(1); rh.position.set(0.0, -0.045, 0.03); rh.rotation.set(-1.1, 0, 0); g.add(rh);
-  const lh = hand(-1, 0.9); lh.position.set(-0.04, -0.03, -0.35); lh.rotation.set(Math.PI / 2, 0, -0.35); g.add(lh);
+  const rh = kitHand(1, 1); rh.position.set(0.019, -0.045, 0.045); rh.rotation.set(-1.1, 0, 0); g.add(rh);
+  const lh = kitHand(-1, 0.95); lh.position.set(-0.014, -0.03, -0.35); lh.rotation.set(Math.PI / 2, 0, -0.55); g.add(lh);
   g.add(forearm([0.0, -0.12, 0.03], [0.1, -0.26, 0.26]));
   g.add(forearm([-0.05, -0.05, -0.28], [-0.2, -0.24, -0.02]));
   g.traverse(o => o.frustumCulled = false);
+  ensureKit(g);
   g.userData = { muzzle: new THREE.Vector3(0, 0.024, -0.71), eject: new THREE.Vector3(0.02, 0.02, -0.12), sight: new THREE.Vector3(0, 0.05, -0.2), pump: pumpM, hip: new THREE.Vector3(0.15, -0.16, -0.42), adsZ: -0.24, fov: 58 };
   return g;
 }
@@ -233,11 +242,12 @@ export function buildPistol() {
   g.add(M([cylZ(0.006, 0.006, 0.18, 0.19, 0.03, 10)], m.steel));
   g.add(M([prof([[0.17, 0.012], [0.17, 0.0], [0.11, -0.002], [0.1, -0.03], [0.06, -0.03], [0.035, -0.002], [0.02, -0.004], [-0.02, -0.12], [0.008, -0.126], [0.03, -0.12], [0.045, -0.04], [0.05, -0.004], [-0.005, 0.0], [-0.005, 0.012]], 0.024, 0.003, [roundRect(0.062, -0.026, 0.1, -0.006, 0.004)])], m.poly));
   const mag = M([boxU(0.022, 0.012, -0.02, 0.03, -0.124, 0, 0.003)], m.poly); g.add(mag);
-  const rh = hand(1); rh.position.set(0.004, -0.06, 0.0); rh.rotation.set(-0.3, 0, 0); g.add(rh);
-  const lh = hand(-1, 1); lh.position.set(-0.02, -0.07, -0.005); lh.rotation.set(-0.3, 0.3, 0.2); g.add(lh);
+  const rh = kitHand(1, 1); rh.position.set(0.02, -0.06, 0.014); rh.rotation.set(-0.3, 0, 0); g.add(rh);
+  const lh = kitHand(-1, 1); lh.position.set(-0.03, -0.07, 0.0); lh.rotation.set(-0.3, 0.3, 0.2); g.add(lh);
   g.add(forearm([0.02, -0.11, 0.03], [0.12, -0.22, 0.24]));
   g.add(forearm([-0.03, -0.12, 0.02], [-0.15, -0.23, 0.22]));
   g.traverse(o => o.frustumCulled = false);
+  ensureKit(g);
   g.userData = { muzzle: new THREE.Vector3(0, 0.03, -0.195), eject: new THREE.Vector3(0.015, 0.04, -0.06), sight: new THREE.Vector3(0, 0.055, -0.02), slide: slideM, mag, hip: new THREE.Vector3(0.12, -0.13, -0.36), adsZ: -0.26, fov: 60 };
   return g;
 }
