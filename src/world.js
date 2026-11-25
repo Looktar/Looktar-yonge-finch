@@ -7,7 +7,7 @@ import { X } from './data_x.js';
 import { buildCity } from './buildings.js';
 import { groundMaterial, ribbonMaterial, tex as tex2 } from './pbr.js';
 import { carGeoms, carPaint } from './cars.js';
-import { wheelKit, wheelKitLow } from './props.js';
+import { wheelKit, wheelKitLow, lampKit, LAMP_LENS, signalKit, SIGNAL_LENSES } from './props.js';
 import { addStreetscape, cityTrees, parseX, nearestRoad } from './street.js';
 
 // ---------- helpers ----------
@@ -408,12 +408,10 @@ export function buildWorld(scene, tex, quality) {
     lamps.push({ x, z, ax, az, on: r() > 0.15, flick: r() < 0.06, wood: true });
   }
   for (const [x, z] of XD.K) { const nr = nearestRoad(roads, x, z); let ax = 1, az = 0; if (nr.foot) { ax = nr.foot[0] - x; az = nr.foot[1] - z; const L = Math.hypot(ax, az) || 1; ax /= L; az /= L; } if (!near(lamps, x, z, 4)) lamps.push({ x, z, ax, az, on: r() > 0.1, flick: false }); }
-  const poleG = mergeGeometries([new THREE.CylinderGeometry(0.07, 0.11, 7.6, 6).translate(0, 3.8, 0), new THREE.BoxGeometry(0.08, 0.08, 1.8).translate(0, 7.5, 0.9)].map(g => g.toNonIndexed()));
-  const headG = new THREE.BoxGeometry(0.28, 0.12, 0.6).translate(0, 7.42, 1.75);
+  const headG = LAMP_LENS(); // the pole itself is a Kit (props.js); only the lens is lit / unlit / flickering
   const poleMat = new THREE.MeshStandardMaterial({ color: 0x9a9fa3, roughness: 0.5, metalness: 0.75 }); // galvanised steel, as on Toronto arterials
   const headOn = new THREE.MeshStandardMaterial({ color: 0x222222, emissive: 0xffd49a, emissiveIntensity: 3.5 });
   const headOff = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.4 });
-  const poles = new THREE.InstancedMesh(poleG, poleMat, lamps.length);
   const onL = lamps.filter(l => l.on && !l.flick), offL = lamps.filter(l => !l.on), fl = lamps.filter(l => l.flick);
   const heads = new THREE.InstancedMesh(headG, headOn, onL.length), headsOff = new THREE.InstancedMesh(headG, headOff, offL.length), headsFl = new THREE.InstancedMesh(headG, headOn.clone(), Math.max(1, fl.length));
   const poolG = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
@@ -423,30 +421,28 @@ export function buildWorld(scene, tex, quality) {
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s1 = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3();
   let ih = 0, io = 0, ifl = 0, ip = 0;
   lamps.forEach((l, i) => {
-    e.set(0, Math.atan2(l.ax, l.az), 0); q.setFromEuler(e); m4.compose(v.set(l.x, 0, l.z), q, s1); poles.setMatrixAt(i, m4);
+    e.set(0, Math.atan2(l.ax, l.az), 0); q.setFromEuler(e); m4.compose(v.set(l.x, 0, l.z), q, s1);
     l.hx = l.x + l.ax * 1.75; l.hz = l.z + l.az * 1.75;
     if (l.flick) { headsFl.setMatrixAt(ifl, m4); m4.compose(v.set(l.hx + l.ax * 1.5, 0.07, l.hz + l.az * 1.5), q, new THREE.Vector3(16, 1, 16)); poolsFl.setMatrixAt(ifl++, m4); }
     else if (l.on) { heads.setMatrixAt(ih++, m4); m4.compose(v.set(l.hx + l.ax * 1.5, 0.07, l.hz + l.az * 1.5), q, new THREE.Vector3(17, 1, 17)); pools.setMatrixAt(ip++, m4); }
     else headsOff.setMatrixAt(io++, m4);
   });
   pools.count = ip;
-  for (const m of [poles, heads, headsOff, headsFl, pools, poolsFl]) { m.instanceMatrix.needsUpdate = true; m.frustumCulled = false; scene.add(m); }
+  for (const m of [heads, headsOff, headsFl, pools, poolsFl]) { m.instanceMatrix.needsUpdate = true; m.frustumCulled = false; scene.add(m); }
+  scene.add(lampKit().instanced(lamps.map(l => [l.x, l.z, Math.atan2(l.ax, l.az)]), 'lampPoles'));
   for (const l of lamps) col.addPoly([[l.x - 0.15, l.z - 0.15], [l.x + 0.15, l.z - 0.15], [l.x + 0.15, l.z + 0.15], [l.x - 0.15, l.z + 0.15]], false);
 
 
   // ---- traffic signals ----
   const sigs = N.split('\n').map(l => l.split('|')).filter(f => f[0] === 'traf').map(f => [+f[1] / 2, +f[2] / 2]);
-  const sigPole = [], sigLamp = [], sigHead = [], sigNames = [];
+  const sigPole = [], sigLamp = [], sigNames = [];
   const streetLabel = n => n.toUpperCase().replace(/\bSTREET\b/, 'ST').replace(/\bAVENUE\b/, 'AVE').replace(/\bDRIVE\b/, 'DR').replace(/\bROAD\b/, 'RD').replace(/\bBOULEVARD\b/, 'BLVD').replace(/\bCRESCENT\b/, 'CRES').replace(/\bEAST$/, 'E').replace(/\bWEST$/, 'W');
   for (const [x, z] of sigs) {
     // nudge to roadside if on road
     let px = x, pz = z; for (let k = 0; k < 12 && onRoad(px, pz); k++) { px += (r() - 0.5) * 6; pz += (r() - 0.5) * 6; }
     const ang = Math.atan2(x - px || 0.01, z - pz || 0.01);
-    const g1 = new THREE.CylinderGeometry(0.1, 0.12, 6, 6).translate(0, 3, 0); const g2 = new THREE.BoxGeometry(0.12, 0.12, 6).translate(0, 5.9, 3); const g3 = new THREE.BoxGeometry(0.38, 1.1, 0.32).translate(0, 5.3, 4.6); const g4 = new THREE.BoxGeometry(0.38, 1.1, 0.32).translate(0, 5.3, 2.4);
-    const l1 = new THREE.SphereGeometry(0.11, 8, 6).translate(0, 5.65, 4.78), l2 = new THREE.SphereGeometry(0.11, 8, 6).translate(0, 5.65, 2.58);
-    for (const g of [g1, g2]) { g.rotateY(ang); g.translate(px, 0, pz); sigPole.push(g.toNonIndexed()); }
-    for (const g of [g3, g4]) { g.rotateY(ang); g.translate(px, 0, pz); sigHead.push(g.toNonIndexed()); }
-    for (const g of [l1, l2]) { g.rotateY(ang); g.translate(px, 0, pz); sigLamp.push(g.toNonIndexed()); }
+    sigPole.push([px, pz, ang]); // pole, arm and heads are a Kit (props.js), instanced below
+    for (const g of SIGNAL_LENSES()) { g.rotateY(ang); g.translate(px, 0, pz); sigLamp.push(g.toNonIndexed()); }
     col.addPoly([[px - 0.2, pz - 0.2], [px + 0.2, pz - 0.2], [px + 0.2, pz + 0.2], [px - 0.2, pz + 0.2]], false);
     // Toronto street-name blade on the mast arm, naming the street the arm reaches over
     const tip = [px + Math.sin(ang) * 4.5, pz + Math.cos(ang) * 4.5];
@@ -472,7 +468,7 @@ export function buildWorld(scene, tex, quality) {
     if (parts.length) { const m = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.5, emissive: 0xffffff, emissiveMap: tx, emissiveIntensity: 0.12 })); scene.add(m); }
   }
   const signalMat = new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff2010, emissiveIntensity: 5 });
-  if (sigPole.length) { scene.add(new THREE.Mesh(mergeGeometries(sigPole), poleMat)); scene.add(new THREE.Mesh(mergeGeometries(sigHead), new THREE.MeshStandardMaterial({ color: 0xe8b400, roughness: 0.45 }))); /* Toronto's yellow signal heads */ scene.add(new THREE.Mesh(mergeGeometries(sigLamp), signalMat)); }
+  if (sigPole.length) { scene.add(signalKit().instanced(sigPole, 'signals')); scene.add(new THREE.Mesh(mergeGeometries(sigLamp), signalMat)); } /* Toronto's yellow 3-section heads; only the red lens is lit */
 
   // ---- landmarks seen in Street View at the corner: the lit billboard over the south-east corner shops, and the
   // keep-right sign + yellow/black hazard marker on the noses of the Yonge medians ----
