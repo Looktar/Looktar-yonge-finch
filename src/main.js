@@ -634,7 +634,7 @@ if (HS === 'debug' || HS === 'diag' || QS.has('debug')) {
   // so one screenshot from a device shows which stage goes dark
   const diag = () => {
     const w = 48, h = 27, rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.UnsignedByteType }), px = new Uint8Array(w * h * 4), rows = [];
-    const meas = () => { renderer.readRenderTargetPixels(rt, 0, 0, w, h, px); let s = 0, z = 0, c = 0; for (let i = 0; i < px.length; i += 4) { const l = (px[i] + px[i + 1] + px[i + 2]) / 3; s += l; if (l < 2) z++; } const i = ((h >> 1) * w + (w >> 1)) * 4; c = px[i] + ',' + px[i + 1] + ',' + px[i + 2]; return '均值 ' + (s / (w * h)).toFixed(1) + ' 黑 ' + Math.round(z / (w * h) * 100) + '% 中心 ' + c; };
+    const meas = () => { renderer.readRenderTargetPixels(rt, 0, 0, w, h, px); let s = 0, z = 0; for (let i = 0; i < px.length; i += 4) { const l = (px[i] + px[i + 1] + px[i + 2]) / 3; s += l; if (l < 2) z++; } const i = ((h >> 1) * w + (w >> 1)) * 4, c = px[i] + ',' + px[i + 1] + ',' + px[i + 2]; return '均值 ' + (s / (w * h)).toFixed(1) + ' 黑 ' + Math.round(z / (w * h) * 100) + '% 中心 ' + c; };
     const grey = (M, o) => new M(Object.assign({ color: 0x808080 }, o));
     const shot = (label, prep, undo) => { let r; try { if (prep) prep(); renderer.setRenderTarget(rt); renderer.setClearColor(0xff00ff, 1); renderer.clear(); renderer.render(scene, camera); r = meas(); } catch (e) { r = '出错 ' + e.message; } renderer.setRenderTarget(null); renderer.setClearColor(0x000000, 1); scene.overrideMaterial = null; if (undo) undo(); rows.push(label + ': ' + r); };
     const pts = []; scene.traverse(o => { if ((o.isPointLight || o.isSpotLight) && o.visible) pts.push(o); });
