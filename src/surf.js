@@ -47,12 +47,13 @@ const FAMILIES = {
     alb = vec3(0.5) * (0.82 + 0.25 * m + 0.12 * (w - 0.5) + 0.08 * (f - 0.5)); tint = 1.0; ao = 0.85 + 0.15 * w;
     rough = 0.9; metal = 0.0; h = 0.3 + 0.5 * w + 0.1 * f;`,
   // painted steel (poles, cabinets, car parts): paint over metal, chips show primer and rust; takes colour
-  paint: `float m = fbm(uv, 4.0, 5), g = vn(uv, 128.0), chip = smoothstep(0.66, 0.7, fbm(uv + 0.37, 7.0, 6));
+  paint: `float m = fbm(uv, 4.0, 5), g = vn(uv, 128.0), chip = smoothstep(0.715, 0.735, fbm(uv + 0.37, 16.0, 5));
     alb = mix(vec3(0.5) * (0.9 + 0.2 * m), vec3(0.16, 0.08, 0.045), chip); tint = 1.0 - chip; ao = 1.0;
     rough = mix(0.42 + 0.12 * m, 0.8, chip); metal = 0.0; h = 0.55 - 0.3 * chip + 0.06 * (g - 0.5);`,
   // weathered concrete: barriers, bases, kerbs
   concrete: `float m = fbm(uv, 4.0, 6), g = vn(uv, 180.0); vec2 v = vor(uv, 24.0); float pit = 1.0 - smoothstep(0.0, 0.12, v.x);
-    alb = vec3(0.42, 0.41, 0.39) * (0.72 + 0.45 * m) * (1.0 - 0.35 * pit) + 0.03 * (g - 0.5); tint = 0.0; ao = 1.0 - 0.4 * pit;
+    float streak = fbm(vec2(uv.x * 1.0, uv.y * 0.12), 24.0, 4); /* rain-washed vertical grime */
+    alb = vec3(0.34, 0.335, 0.32) * (0.72 + 0.45 * m) * (1.0 - 0.35 * pit) * (0.78 + 0.3 * smoothstep(0.3, 0.7, streak)) + 0.03 * (g - 0.5); tint = 0.0; ao = 1.0 - 0.4 * pit;
     rough = 0.86 + 0.08 * (g - 0.5); metal = 0.0; h = 0.55 + 0.25 * (m - 0.5) - 0.35 * pit + 0.1 * (g - 0.5);`,
 };
 
@@ -94,17 +95,17 @@ export function surfTextures(fam, size = 512) {
 // opts: color (for tinted families), wearColor / wearRough / wearMetal (bare material under the finish), wear (0..1),
 // normal strength, aoK (how much the kit AO darkens), drops (rain beads, per-metre density, 0 = none)
 export function kitMaterial(fam, opts = {}) {
-  const o = Object.assign({ color: 0xffffff, scale: 12, wear: 0.8, wearColor: 0x8a8c8e, wearRough: 0.32, wearMetal: 1, normal: 1, aoK: 1, drops: 0, envMapIntensity: 1 }, opts);
+  const o = Object.assign({ color: 0xffffff, scale: 12, wear: 0.8, wearColor: 0x8a8c8e, wearRough: 0.32, wearMetal: 1, normal: 1, aoK: 1, drops: 0, ground: 0, envMapIntensity: 1 }, opts);
   const T = surfTextures(fam); // baked now, never from inside a render
   const m = new THREE.MeshStandardMaterial({ color: o.color, roughness: 1, metalness: 1, envMapIntensity: o.envMapIntensity });
-  const U = { sA: { value: null }, sO: { value: null }, sN: { value: null }, sScale: { value: o.scale }, sWear: { value: o.wear }, sWearCol: { value: new THREE.Color(o.wearColor) }, sWearR: { value: o.wearRough }, sWearM: { value: o.wearMetal }, sNrm: { value: o.normal }, sAoK: { value: o.aoK } };
+  const U = { sA: { value: null }, sO: { value: null }, sN: { value: null }, sScale: { value: o.scale }, sWear: { value: o.wear }, sWearCol: { value: new THREE.Color(o.wearColor) }, sWearR: { value: o.wearRough }, sWearM: { value: o.wearMetal }, sNrm: { value: o.normal }, sAoK: { value: o.aoK }, sGround: { value: o.ground } };
   m.userData.surf = U; m.userData.fam = fam;
   m.onBeforeCompile = sh => {
     U.sA.value = T.a; U.sO.value = T.o; U.sN.value = T.n; Object.assign(sh.uniforms, U);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 kit; varying vec3 vOp; varying vec3 vOn; varying vec2 vKit; varying mat3 vNM;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvOp = position; vOn = normal; vKit = kit; vNM = normalMatrix;');
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvOp = position; vOn = normal; vKit = kit;\n#ifdef USE_INSTANCING\n vNM = normalMatrix * mat3(instanceMatrix);\n#else\n vNM = normalMatrix;\n#endif\n');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-      uniform sampler2D sA, sO, sN; uniform float sScale, sWear, sWearR, sWearM, sNrm, sAoK; uniform vec3 sWearCol;
+      uniform sampler2D sA, sO, sN; uniform float sScale, sWear, sWearR, sWearM, sNrm, sAoK, sGround; uniform vec3 sWearCol; float sGb;
       varying vec3 vOp; varying vec3 vOn; varying vec2 vKit; varying mat3 vNM; vec3 sTw; vec4 sAs, sOs; float sWm;
       float dh(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
       vec4 tri(sampler2D t){ return texture2D(t, vOp.zy * sScale) * sTw.x + texture2D(t, vOp.xz * sScale) * sTw.y + texture2D(t, vOp.xy * sScale) * sTw.z; }`)
@@ -114,9 +115,11 @@ export function kitMaterial(fam, opts = {}) {
         vec3 base = mix(alb, alb * 2.0 * diffuseColor.rgb, sAs.a);
         /* edge wear: exposed edges, broken up by the height so it reads as chips and rubbed patches */
         sWm = clamp(vKit.y * sWear * smoothstep(0.58, 0.82, 0.4 * sOs.a + 0.25 * dh(floor(vOp * 260.0)) + 0.6 * texture2D(sO, vOp.zy * sScale * 0.29 + vOp.x * 0.3).a), 0.0, 1.0); /* sparse chips, not a uniform rim */
-        diffuseColor.rgb = mix(base, sWearCol, sWm) * mix(1.0, vKit.x, sAoK) * sOs.r; }`)
+        diffuseColor.rgb = mix(base, sWearCol, sWm) * mix(1.0, vKit.x, sAoK) * sOs.r;
+        /* Saltline's ground band: grime and damp in the first centimetres above the pavement */
+        sGb = sGround > 0.0 ? 1.0 - smoothstep(0.0, sGround, vOp.y + 0.04 * (sOs.a - 0.5)) : 0.0; diffuseColor.rgb *= mix(1.0, 0.5, sGb); }`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-      roughnessFactor = mix(sOs.g, sWearR, sWm);`)
+      roughnessFactor = mix(mix(sOs.g, sWearR, sWm), 0.35, sGb * 0.7);`)
       .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
       metalnessFactor = mix(sOs.b, sWearM, sWm);`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -127,6 +130,6 @@ export function kitMaterial(fam, opts = {}) {
         vec3 d = f - of * 0.5; float r = 0.12 + 0.2 * dh(c + 7.7); float dr = step(0.66, hh) * (1.0 - smoothstep(r * 0.7, r, length(d)));
         roughnessFactor = mix(roughnessFactor, 0.05, dr); metalnessFactor = mix(metalnessFactor, 0.0, dr); diffuseColor.rgb *= 1.0 - 0.3 * dr; normal = normalize(normal + vNM * (d / max(r, 1e-3)) * dr * 0.9); }` : ''));
   };
-  m.customProgramCacheKey = () => 'kit-' + fam + '-' + o.drops;
+  m.customProgramCacheKey = () => 'kit-' + fam + '-' + o.drops + (o.ground ? 'g' : '');
   return m;
 }
