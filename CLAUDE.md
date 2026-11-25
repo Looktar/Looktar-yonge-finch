@@ -67,6 +67,6 @@ tests/e2e/smoke.mjs  Playwright 冒烟测试
 - three r155 以后是物理光照单位：半球光/环境光约为旧版 π 倍。
 - 立面 shader：常量 varying 经透视插值不精确，hash 前先 `floor()` 量化。
 - **着色器代码（JS 模板字符串里）只能用 `/* */` 注释**，`//` 会吞掉拼接到同一行的代码（已经出过三次事故），单元测试会查。
-- 近景模型照 Saltline 的做法：用 `Kit` 零件清单 + `kitMaterial` 程序材质，不引入外部模型（D-14）。
+- 近景模型：可以用免费的外部模型（D-23，**不花钱**；优先 CC0，如 Poly Haven；CC-BY 要在 `CREDITS.md` 和菜单署名；不用要付费或许可不明的）。没有合适免费模型的东西，照 Saltline 用 `Kit` 零件清单 + `kitMaterial` 程序材质自己做。
 - 署名：OSM（ODbL）、多伦多 3D Massing 与 Street Tree（OGL-Toronto）、Mixamo。新增数据源要补署名。
 - 谷歌街景接口被权限拒绝，不要绕过；实景参考用 Wikimedia Commons。
