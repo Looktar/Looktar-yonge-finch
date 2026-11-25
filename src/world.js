@@ -7,6 +7,7 @@ import { X } from './data_x.js';
 import { buildCity } from './buildings.js';
 import { groundMaterial, ribbonMaterial, tex as tex2 } from './pbr.js';
 import { carGeoms, carPaint } from './cars.js';
+import { buildGasStation } from './gas.js';
 import { wheelKit, wheelKitLow, lampKit, LAMP_LENS, signalKit, SIGNAL_LENSES } from './props.js';
 import { addStreetscape, cityTrees, parseX, nearestRoad } from './street.js';
 
@@ -611,6 +612,7 @@ export function buildWorld(scene, tex, quality) {
 
   // ---- street furniture from OSM: sidewalks, crossings, fences, canopies, poles & wires, hydro towers, hydrants, signs ----
   addStreetscape(scene, { col, roads, onRoad, rng: r, X: XD, walkMat, PLAY_C, PLAY_R });
+  scene.add(buildGasStation(col)); // 5571 Yonge St (OSM), south-east of the intersection
 
   // ---- boundary: concrete barriers + tape on roads crossing the ring ----
   const barr = [];

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GAS } from './gas.js';
 import { jerseyKit, coneKit, drumKit, hydrantKit, binKit, benchKit, newsboxKit, utilityPoleKit } from './props.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { X } from './data_x.js';
@@ -89,7 +90,7 @@ export function addStreetscape(scene, ctx) {
   // ---- canopies / shelters ----
   {
     const parts = [], pil = []; const mat = new THREE.MeshStandardMaterial({ color: 0x6a7076, roughness: 0.45, metalness: 0.55 });
-    for (const s of D.C) { const p = s.p; if (p.length < 3) continue; const h = s.a ? Math.max(3.2, +s.a * 3.6) : 4.2;
+    for (const s of D.C) { const p = s.p; if (p.length < 3) continue; if (p.every(q2 => q2[0] > GAS.lot[0] && q2[0] < GAS.lot[2] && q2[1] > GAS.lot[1] && q2[1] < GAS.lot[3])) continue; /* the gas station builds its own canopy (gas.js) */ const h = s.a ? Math.max(3.2, +s.a * 3.6) : 4.2;
       // a solid slab with fascia edges (two bare planes read as floating boards)
       const sh = new THREE.Shape(p.map(q2 => new THREE.Vector2(q2[0], q2[1])));
       const g = new THREE.ExtrudeGeometry(sh, { depth: 0.32, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 1 });

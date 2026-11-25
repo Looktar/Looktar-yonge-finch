@@ -12,4 +12,5 @@
 | 环境光遮蔽 | [N8AO](https://github.com/N8python/n8ao) | CC0 |
 | 渲染引擎 | [three.js](https://threejs.org) | MIT |
 | 字体 Oswald、Barlow Condensed、Noto Sans SC | Google Fonts | SIL OFL |
+| 加油站位置和轮廓（OSM way 33743058，经 Nominatim 查询） | © OpenStreetMap 贡献者 | ODbL |
 | 实景对照参考（不进游戏） | Wikimedia Commons、苹果地图 Look Around | — |
