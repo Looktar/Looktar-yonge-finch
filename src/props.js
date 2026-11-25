@@ -22,6 +22,9 @@ function mats() {
     blue: kitMaterial('paint', { color: 0x1f4f9a, scale: 3, wear: 0.6, wearColor: 0xc0c4c8, wearRough: 0.4, wearMetal: 0 }),
     yellow: new THREE.MeshStandardMaterial({ color: 0xffc21a, roughness: 0.35, emissive: 0x3a2600 }), // retro-reflector
     glass: new THREE.MeshStandardMaterial({ color: 0x1a2226, roughness: 0.08, metalness: 0.2, envMapIntensity: 1.4 }),
+    wood: kitMaterial('wood', { scale: 1.2, wear: 0, normal: 0.8, ground: 0.4 }),
+    ceramic: kitMaterial('satin', { color: 0xa9adab, scale: 6, wear: 0.3, wearColor: 0x6a5a48 }),
+    xfmr: kitMaterial('paint', { color: 0x6a766f, scale: 4, wear: 0.7, wearColor: 0x5a4532, wearRough: 0.75, wearMetal: 0.2 }),
     galv: kitMaterial('galv', { scale: 2.2, wear: 0.3, wearColor: 0x6f6a62, wearRough: 0.7, wearMetal: 0.4, ground: 0.25 }),
     signal: kitMaterial('poly', { color: 0xe8b400, scale: 4, normal: 0.2, wear: 0.3, wearColor: 0x8a7a40, wearRough: 0.6, wearMetal: 0 }),
     lumi: kitMaterial('satin', { color: 0x6c7074, scale: 4, wear: 0.4 }),
@@ -209,4 +212,22 @@ export function signalKit() {
   return k;
 }
 export const SIGNAL_LENSES = () => [4.6, 2.4].map(zc => { const g = new THREE.CircleGeometry(0.1, 16); g.rotateY(Math.PI / 2); g.translate(0.149, 5.65, zc); return g; });
+
+// ---- Toronto Hydro wood pole: tapered creosoted shaft, crossarm with galvanised braces, three skirted insulators,
+// a pole-top transformer with bushings and a fuse cutout, pole tag. Crossarm runs along local x (across the road).
+export function utilityPoleKit() {
+  const m = mats(), k = new Kit();
+  k.add(lathe([[0.175, 0], [0.16, 2.0], [0.12, 10.9], [0.1, 11.05], [0, 11.1]], 10), m.wood, { rot: UP });
+  k.add(chamferBox(2.5, 0.1, 0.12, 0.015), m.wood, { at: [0, 10.3, 0.17] });
+  for (const sx of [-1, 1]) k.add(tube([[sx * 0.75, 10.27, 0.17], [sx * 0.35, 9.85, 0.17], [0, 9.6, 0.15]], 0.018, 5, 4), m.galv);
+  const ins = [[0.0, 0], [0.05, 0], [0.05, 0.03], [0.085, 0.04], [0.05, 0.06], [0.05, 0.08], [0.075, 0.09], [0.045, 0.11], [0.04, 0.16], [0, 0.17]];
+  for (const x of [-1.05, 0, 1.05]) k.add(lathe(ins, 10), m.ceramic, { at: [x, 10.35, 0.17], rot: UP });
+  // transformer can on the road side, bracket, bushings, cutout
+  k.add(lathe([[0, 0], [0.26, 0], [0.27, 0.02], [0.27, 0.78], [0.25, 0.82], [0.2, 0.84], [0, 0.85]], 14), m.xfmr, { at: [0, 8.55, 0.5], rot: UP });
+  k.add(chamferBox(0.12, 0.6, 0.18, 0.02), m.galv, { at: [0, 8.95, 0.24] });
+  for (const x of [-0.1, 0.1]) k.add(lathe(ins.map(([r, y]) => [r * 0.7, y * 0.9]), 8), m.ceramic, { at: [x, 9.4, 0.55], rot: UP });
+  k.add(chamferBox(0.06, 0.38, 0.06, 0.01), m.ceramic, { at: [0.35, 9.55, 0.2], rot: [0, 0, 0.35] }); // fuse cutout
+  k.add(chamferBox(0.09, 0.05, 0.012, 0.004), m.yellow, { at: [0, 1.9, 0.165] }); // pole tag
+  return k;
+}
 

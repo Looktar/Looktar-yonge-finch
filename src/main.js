@@ -49,7 +49,7 @@ THREE.ShaderChunk.fog_pars_fragment = `#ifdef USE_FOG
 THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   vec3 fogWD = normalize((vec4(vFogView, 0.0) * viewMatrix).xyz);
   float fogSun = max(dot(fogWD, vec3(${SUN.x.toFixed(4)}, ${SUN.y.toFixed(4)}, ${SUN.z.toFixed(4)})), 0.0);
-  vec3 fogC = mix(fogColor, vec3(1.35, 0.86, 0.48), pow(fogSun, 5.0) * 0.95) * (1.0 + 0.6 * pow(fogSun, 24.0));
+  vec3 fogC = mix(fogColor, vec3(1.3, 0.85, 0.5), pow(fogSun, 8.0) * 0.7) * (1.0 + 0.35 * pow(fogSun, 32.0));
   #ifdef FOG_EXP2
     /* height fog: dense near the street, thinning upward (analytic integral of d0 * exp(-h / 28 m) along the ray) */
     float fogDist = length(vFogView); float h0 = cameraPosition.y, dh = fogWD.y * fogDist;
@@ -64,7 +64,7 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
 // glass, droplets) can exceed that on real GPUs, and bloom then smears Inf/NaN over the whole frame
 THREE.ShaderChunk.opaque_fragment = 'outgoingLight = clamp(outgoingLight, vec3(0.0), vec3(3e4));\n' + THREE.ShaderChunk.opaque_fragment;
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x8c8a86, 0.0015);
+scene.fog = new THREE.FogExp2(0x7f8386, 0.0011);
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 700);
 camera.rotation.order = 'YXZ'; scene.add(camera);
 const sky = makeSky(); scene.add(sky);
@@ -95,7 +95,7 @@ scene.add(mirror);
   const gnd = new THREE.Mesh(new THREE.CircleGeometry(80, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x4a4542 })); gnd.position.y = -3; es.add(gnd);
   const r = rng(5); const bg = new THREE.BoxGeometry(1, 1, 1);
   for (let i = 0; i < 26; i++) { const a = r() * Math.PI * 2, d = 45 + r() * 25, h = 4 + r() * 10; const m = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.16 + r() * 0.12, 0.15 + r() * 0.1, 0.15 + r() * 0.1) })); m.position.set(Math.cos(a) * d, h / 2 - 3, Math.sin(a) * d); m.scale.set(8 + r() * 10, h, 8 + r() * 10); m.lookAt(0, m.position.y, 0); es.add(m); }
-  const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(es, 0.015, 0.1, 400).texture; scene.environmentIntensity = 0.7;
+  const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(es, 0.015, 0.1, 400).texture; scene.environmentIntensity = 0.6;
   // self-test: a chrome ball lit only by the environment must not come out black. Some GPUs (Apple) have produced
   // NaN texels in the map, which turns every PBR surface black; drop the map rather than ship a black city
   const ts = new THREE.Scene(); ts.environment = scene.environment;
@@ -108,9 +108,9 @@ scene.add(mirror);
   if (!envOk) { console.warn('environment map self-test failed (' + black + '/' + n + ' black), environment lighting off'); scene.environment = null; }
 }
 
-const hemi = new THREE.HemisphereLight(0x9aa8bd, 0x3a3631, 2.0); scene.add(hemi);
+const hemi = new THREE.HemisphereLight(0x93a3bc, 0x35302b, 1.55); scene.add(hemi);
 // low sun in the WSW, as at a late-November sunset over Yonge & Finch
-const sun = new THREE.DirectionalLight(0xffb070, 7.0); scene.add(sun); scene.add(sun.target);
+const sun = new THREE.DirectionalLight(0xffb070, 8.2); scene.add(sun); scene.add(sun.target);
 sun.castShadow = Q.shadow > 0; sun.shadow.mapSize.set(Q.shadow || 1024, Q.shadow || 1024);
 { const c = sun.shadow.camera; c.left = -130; c.right = 130; c.top = 70; c.bottom = -70; c.near = 1; c.far = 1200; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.06; }
 function placeSun(x, z) { // follow the player, snapped to shadow texels to avoid shimmering
@@ -684,4 +684,4 @@ if (HS === 'debug' || HS === 'diag' || QS.has('debug')) {
   window.__diag = diag;
   if (HS === 'diag') setTimeout(runD, 4000);
 }
-window.__yf = { S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun, tick: () => frameNo++, mirror, WET, finalPass, vmScene, vmCam, vmRoot };
+window.__yf = { Raycaster: THREE.Raycaster, S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun, tick: () => frameNo++, mirror, WET, finalPass, vmScene, vmCam, vmRoot };

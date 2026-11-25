@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { jerseyKit, coneKit, drumKit, hydrantKit, binKit, benchKit, newsboxKit } from './props.js';
+import { jerseyKit, coneKit, drumKit, hydrantKit, binKit, benchKit, newsboxKit, utilityPoleKit } from './props.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { X } from './data_x.js';
 import { T as CITY_TREES } from './data_t.js';
@@ -88,27 +88,24 @@ export function addStreetscape(scene, ctx) {
   }
   // ---- canopies / shelters ----
   {
-    const parts = [], pil = []; const mat = new THREE.MeshStandardMaterial({ color: 0x5d636a, roughness: 0.5, metalness: 0.4 });
+    const parts = [], pil = []; const mat = new THREE.MeshStandardMaterial({ color: 0x6a7076, roughness: 0.45, metalness: 0.55 });
     for (const s of D.C) { const p = s.p; if (p.length < 3) continue; const h = s.a ? Math.max(3.2, +s.a * 3.6) : 4.2;
-      const tri = THREE.ShapeUtils.triangulateShape(p.map(q2 => new THREE.Vector2(q2[0], q2[1])), []);
-      const pos = []; for (const t of tri) for (const k of [t[0], t[2], t[1]]) pos.push(p[k][0], h, p[k][1]);
-      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); parts.push(g);
-      const g2 = g.clone(); g2.translate(0, 0.25, 0); parts.push(g2);
+      // a solid slab with fascia edges (two bare planes read as floating boards)
+      const sh = new THREE.Shape(p.map(q2 => new THREE.Vector2(q2[0], q2[1])));
+      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.32, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 1 });
+      g.rotateX(Math.PI / 2); g.translate(0, h + 0.32, 0); parts.push(g.toNonIndexed());
       for (let i = 0; i < p.length; i += Math.max(1, Math.floor(p.length / 6))) { pil.push(new THREE.BoxGeometry(0.22, h, 0.22).translate(p[i][0], h / 2, p[i][1])); col.addPoly([[p[i][0] - 0.12, p[i][1] - 0.12], [p[i][0] + 0.12, p[i][1] - 0.12], [p[i][0] + 0.12, p[i][1] + 0.12], [p[i][0] - 0.12, p[i][1] + 0.12]], false); } }
-    if (parts.length) { const m = new THREE.Mesh(mergeGeometries(parts), mat); m.material.side = THREE.DoubleSide; scene.add(m); scene.add(new THREE.Mesh(mergeGeometries(pil), mat)); }
+    if (parts.length) { const m = new THREE.Mesh(mergeGeometries(parts.map(g => { g.deleteAttribute('uv'); return g; })), mat); m.castShadow = m.receiveShadow = true; scene.add(m); scene.add(new THREE.Mesh(mergeGeometries(pil.map(g => g.toNonIndexed())), mat)); }
   }
   // ---- utility poles (wood) + local power lines ----
-  const woodMat = new THREE.MeshStandardMaterial({ color: 0x3b2f26, roughness: 0.95 });
   const wireMat = new THREE.LineBasicMaterial({ color: 0x0b0c0d, transparent: true, opacity: 0.85 });
   const poles = D.p.filter(([x, z]) => inPlay(x, z, 40));
   {
-    const g = mergeGeometries([new THREE.CylinderGeometry(0.12, 0.17, 11, 7).translate(0, 5.5, 0), new THREE.BoxGeometry(2.0, 0.12, 0.12).translate(0, 10.3, 0), new THREE.CylinderGeometry(0.22, 0.22, 0.7, 8).translate(0.45, 9.3, 0.25)].map(x => x.toNonIndexed()));
-    const im = new THREE.InstancedMesh(g, woodMat, Math.max(1, poles.length));
-    poles.forEach(([x, z], i) => { const nr = nearestRoad(roads, x, z); const ang = nr.dir ? Math.atan2(nr.dir[0], nr.dir[1]) + Math.PI / 2 : r() * 6; e.set(0, ang, (r() - 0.5) * 0.03); q.setFromEuler(e); m4.compose(v.set(x, 0, z), q, one); im.setMatrixAt(i, m4); col.addPoly([[x - 0.18, z - 0.18], [x + 0.18, z - 0.18], [x + 0.18, z + 0.18], [x - 0.18, z + 0.18]], false); });
-    im.instanceMatrix.needsUpdate = true; scene.add(im);
+    const pl = poles.map(([x, z]) => { const nr = nearestRoad(roads, x, z); const ang = nr.dir ? Math.atan2(nr.dir[0], nr.dir[1]) + Math.PI / 2 : r() * 6; col.addPoly([[x - 0.18, z - 0.18], [x + 0.18, z - 0.18], [x + 0.18, z + 0.18], [x - 0.18, z + 0.18]], false); return [x, z, ang]; });
+    scene.add(utilityPoleKit().instanced(pl, 'utilityPoles'));
     const w = [];
     for (const s of D.l) { const p = s.p; if (!p.some(q2 => inPlay(q2[0], q2[1], 60))) continue; for (let i = 0; i < p.length - 1; i++) { const a = p[i], b = p[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 2 || L > 90) continue; const nx = -(b[1] - a[1]) / L, nz = (b[0] - a[0]) / L;
-      for (const [o, h] of [[-0.85, 10.3], [0.85, 10.3], [0, 9.0]]) catenary([a[0] + nx * o, a[1] + nz * o], [b[0] + nx * o, b[1] + nz * o], h, h, 0.25 + L * 0.012, 8, w); } }
+      for (const [o, h] of [[-1.05, 10.5], [1.05, 10.5], [0, 10.52], [0, 9.0]]) catenary([a[0] + nx * o, a[1] + nz * o], [b[0] + nx * o, b[1] + nz * o], h, h, 0.25 + L * 0.012, 8, w); } }
     const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(w, 3)); const ls = new THREE.LineSegments(wg, wireMat); ls.frustumCulled = false; scene.add(ls);
   }
   // ---- hydro transmission towers + lines (Finch hydro corridor) ----

@@ -70,20 +70,20 @@ export function wetPatch(sh, damp = '1.0', pud = '1.0') { // GLSL expressions: h
     .replace('#include <emissivemap_fragment>', `{
       wPud = wetPud(vWw.xz) * uWet * (${pud}); wDamp = wetDamp(vWw.xz) * uWet * (${damp});
       diffuseColor.rgb *= mix(1.0, 0.5, wDamp) * mix(1.0, 0.35, wPud);
-      roughnessFactor = mix(roughnessFactor, 0.32, wDamp); roughnessFactor = mix(roughnessFactor, 0.14, wPud);
+      roughnessFactor = mix(roughnessFactor, 0.55, wDamp); roughnessFactor = mix(roughnessFactor, 0.12, wPud);
       normal = normalize(mix(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), wPud));
     }
     #include <emissivemap_fragment>`)
     .replace('#include <opaque_fragment>', `{
       vec3 Vw = normalize(cameraPosition - vWw); float fres = 0.03 + 0.97 * pow(1.0 - clamp(Vw.y, 0.0, 1.0), 5.0);
-      vec2 off = normal.xy * 0.035 * (1.0 - wPud);
+      vec2 off = (normal - normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)).xy * 0.035 * (1.0 - wPud); /* only the bump perturbation: the view-space up vector itself pushed the lookup into the mirrored sky */
       vec3 refl = vec3(0.0);
       if (uReflOn > 0.5) { /* rough wet asphalt stretches reflections vertically (Saltline's long streaks of light) */
-        float st = (1.0 - wPud) * 0.06 * vRuv.w;
-        for (int i = 0; i < 6; i++) { float o = (float(i) - 1.0) * st * 0.35; refl += texture2DProj(tRefl, vRuv + vec4(off * vRuv.w, o, 0.0)).rgb; }
+        float st = (1.0 - wPud) * 0.03 * vRuv.w; /* streak centred on the true reflection: a one-sided smear picked up the bright sky */
+        for (int i = 0; i < 6; i++) { float o = (float(i) - 2.5) * st * 0.3; refl += texture2DProj(tRefl, vRuv + vec4(off * vRuv.w, o, 0.0)).rgb; }
         refl /= 6.0;
       }
-      float amt = uReflOn * mix(wDamp * 0.95, 1.0, wPud) * mix(fres, 1.0, 0.25 * wPud);
+      float amt = uReflOn * wPud * mix(fres, 1.0, 0.25); /* only standing water mirrors; damp asphalt keeps its own (rougher) specular */
       outgoingLight = mix(outgoingLight, refl, clamp(amt, 0.0, 1.0));
     }
     #include <opaque_fragment>`);
@@ -121,7 +121,7 @@ export function groundMaterial(mask) {
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRo;')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         { vec3 nw = normalize(vec3(gNts.x, gNts.z, -gNts.y)); normal = normalize((viewMatrix * vec4(nw, 0.0)).xyz); }`);
-    wetPatch(sh, 'mix(0.25, 0.8, gK)', '0.8 * gK'); // grass soaks it up; puddles only on the paving
+    wetPatch(sh, 'mix(0.25, 0.8, gK)', '0.35 * gK'); // grass soaks it up; puddles only on the paving
   };
   return m;
 }
@@ -133,10 +133,40 @@ export function ribbonMaterial(set, opts = {}) {
   const k = 7 / TILE[set];
   const m = new THREE.MeshStandardMaterial(Object.assign({
     map: tex(set + '_col', true, k), normalMap: tex(set + '_nor', false, k),
-    roughness: 0.93, metalness: 0, normalScale: new THREE.Vector2(1, 1), envMapIntensity: 0.4,
+    roughness: 0.93, metalness: 0, normalScale: new THREE.Vector2(1, 1), envMapIntensity: 0.12, // the env map is sky only: glossy wet ground would mirror bright sky where buildings stand
   }, opts));
-  const wk = set === 'road' ? ['1.0', '1.0'] : set === 'walk' ? ['0.8', '0.7'] : ['0.25', '0.0'];
-  m.onBeforeCompile = sh => wetPatch(sh, wk[0], wk[1]);
+  const wk = set === 'road' ? ['1.0', '1.0'] : set === 'walk' ? ['0.8', '0.3'] : ['0.25', '0.0'];
+  m.onBeforeCompile = sh => { if (set === 'road') roadDetail(sh); wetPatch(sh, wk[0], wk[1]); };
   m.customProgramCacheKey = () => 'wet' + set;
   return m;
 }
+
+// worn asphalt, in world space (needs vWw from wetPatch, which is applied after this): a tar-sealed crack network
+// in some stretches, darker rectangular patches, oil stains and cast-iron manhole covers
+function roadDetail(sh) {
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+    float rdH(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    vec2 rdH2(vec2 p){ return vec2(rdH(p), rdH(p + 17.3)); }
+    float rdN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(rdH(i), rdH(i + vec2(1, 0)), f.x), mix(rdH(i + vec2(0, 1)), rdH(i + vec2(1, 1)), f.x), f.y); }
+    vec2 rdV(vec2 p){ vec2 i = floor(p), f = fract(p); float d1 = 8.0, d2 = 8.0;
+      for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++){ vec2 g = vec2(x, y); float d = length(g + rdH2(i + g) - f); if (d < d1){ d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
+      return vec2(d1, d2); }`)
+    .replace('#include <emissivemap_fragment>', `{
+      vec2 wp = vWw.xz; float fw = length(fwidth(wp));
+      vec2 v = rdV(wp / 5.0 + 0.35 * vec2(rdN(wp * 0.9), rdN(wp * 0.9 + 3.0))); float edge = v.y - v.x;
+      float crack = (1.0 - smoothstep(0.0, 0.03 + fw * 0.3, edge)) * smoothstep(0.55, 0.72, rdN(wp / 14.0)) * (1.0 - smoothstep(0.8, 2.0, fw * 8.0));
+      vec2 cell = floor(wp / 18.0), cc = (cell + 0.2 + 0.6 * rdH2(cell)) * 18.0, hs = vec2(2.0 + 3.0 * rdH(cell + 3.0), 1.5 + 2.5 * rdH(cell + 5.0));
+      float pq = max(abs(wp.x - cc.x) / hs.x, abs(wp.y - cc.y) / hs.y); float patchP = step(0.6, rdH(cell + 9.0)) * (1.0 - smoothstep(0.97, 1.0, pq));
+      float stain = smoothstep(0.64, 0.82, rdN(wp / 2.3)) * smoothstep(0.45, 0.7, rdN(wp / 11.0 + 7.0));
+      vec2 mc = floor(wp / 31.0), mcc = (mc + 0.25 + 0.5 * rdH2(mc + 11.0)) * 31.0; float md = length(wp - mcc), hasM = step(0.45, rdH(mc + 21.0));
+      float man = hasM * (1.0 - smoothstep(0.33, 0.335 + fw, md)), ring = hasM * smoothstep(0.29, 0.295 + fw, md) * (1.0 - smoothstep(0.31, 0.315 + fw, md));
+      diffuseColor.rgb *= mix(1.0, 0.8, patchP) * (1.0 - 0.5 * stain);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.016), crack * 0.85);
+      float grid = step(0.5, fract((wp.x + wp.y) * 7.0)) * step(0.5, fract((wp.x - wp.y) * 7.0));
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.045, 0.042, 0.04) * (0.75 + 0.5 * grid) * (1.0 - 0.6 * ring), man);
+      roughnessFactor = mix(roughnessFactor, 0.5, crack * 0.8); roughnessFactor = mix(roughnessFactor, 0.97, patchP * 0.6);
+      roughnessFactor = mix(roughnessFactor, 0.38, stain * 0.6); roughnessFactor = mix(roughnessFactor, 0.45, man);
+    }
+    #include <emissivemap_fragment>`);
+}
+

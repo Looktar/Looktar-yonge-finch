@@ -3,6 +3,8 @@
 // precast condo towers with balconies, glass towers, 1970s brick slabs, strip retail with shop signs,
 // brick / stucco / siding houses with gable or hip roofs, the TTC & GO terminals).
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { buildStorefronts } from './storefront.js';
 import { B } from './data_b.js';
 import { HM, BX } from './data_x.js';
 import { nearestRoad } from './street.js';
@@ -40,7 +42,7 @@ const TAGS = [
 // shop signs at their real addresses
 const NAMED_SIGNS = [[-36, 189, 0], [50, 217, 1], [54, 175, 2], [0, -24, 3], [-21, -159, 4], [49, -36, 5], [20, -157, 4]];
 
-function parseBuildings() {
+export function parseBuildings() {
   const list = []; const hm = HM.split(';');
   B.split('\n').forEach((line, i) => {
     const f = line.split('|'); const t = f[1]; const p = dec(f[5]); if (p.length < 3) return;
@@ -412,7 +414,7 @@ export function buildCity(roads, col) {
   for (const b of list) assignStyle(b, r);
   const gb = new GB();
   const white = new THREE.Color(1, 1, 1);
-  const balcSlab = [], balcRail = [], awnings = [], signs = [];
+  const balcSlab = [], balcRail = [], awnings = [], signs = [], shopFronts = [];
   const fronts = ['pri', 'sec', 'ter'];
   const usedSign = new Set();
 
@@ -551,6 +553,8 @@ export function buildCity(roads, col) {
       }
     }
 
+    // storefront frames follow every street-facing ground-floor edge the shader glazes
+    if (y0 < 1 && b.st !== ST.TRN) for (const e of edges) if (e && e.front) shopFronts.push({ e, b, sfH: b.st === ST.RET ? 3.5 : 4.3 });
     // shop signs & awnings on street fronts
     for (const e of edges) {
       if (!e || !e.front) continue;
@@ -606,17 +610,12 @@ export function buildCity(roads, col) {
     balcRail.forEach((s, i) => { e4.set(0, s[3], 0); q4.setFromEuler(e4); m4.compose(v4.set(s[0], s[1], s[2]), q4, s4.set(s[6], s[5], s[4])); im.setMatrixAt(i, m4); });
     im.frustumCulled = false; im.renderOrder = 4; grp.add(im);
   }
-  if (awnings.length) {
-    const ag = new THREE.BoxGeometry(1, 1, 1);
-    const im = new THREE.InstancedMesh(ag, new THREE.MeshStandardMaterial({ roughness: 0.7 }), awnings.length);
-    awnings.forEach((a, i) => { const e = a.e; const mid = (a.s0 + a.s1) / 2; e4.set(0, Math.atan2(e.tx, e.tz), 0); q4.setFromEuler(e4); m4.compose(v4.set(e.a[0] + e.tx * mid + e.nx * 0.6, a.y, e.a[1] + e.tz * mid + e.nz * 0.6), q4, s4.set(1.2, 0.14, a.s1 - a.s0)); im.setMatrixAt(i, m4); im.setColorAt(i, C(a.c)); });
-    im.castShadow = true; im.frustumCulled = false; grp.add(im);
-  }
+  grp.add(buildStorefronts(shopFronts, signs, awnings, (x, z) => Math.hypot(x, z - 60) < 330));
   // signs: textured, backlit quads
   if (signs.length) {
     const P = [], U = [], Nn = [];
     for (const s of signs) {
-      const e = s.e; const o = 0.09; const ax = e.a[0] + e.tx * s.s0 + e.nx * o, az = e.a[1] + e.tz * s.s0 + e.nz * o, bx = e.a[0] + e.tx * s.s1 + e.nx * o, bz = e.a[1] + e.tz * s.s1 + e.nz * o;
+      const e = s.e; const o = 0.195; /* on the face of the lightbox (storefront.js) */ const ax = e.a[0] + e.tx * s.s0 + e.nx * o, az = e.a[1] + e.tz * s.s0 + e.nz * o, bx = e.a[0] + e.tx * s.s1 + e.nx * o, bz = e.a[1] + e.tz * s.s1 + e.nz * o;
       const col0 = (s.id % 4) / 4, row0 = Math.floor(s.id / 4) / 8; const u0 = col0 + 0.002, u1 = col0 + 0.25 - 0.002, v1 = 1 - row0 - 0.004, v0 = 1 - row0 - 0.125 + 0.004;
       // edges run clockwise seen from above, so for a viewer outside, a->q runs right-to-left: mirror u
       const qd = [[ax, s.y0, az, u1, v0], [bx, s.y0, bz, u0, v0], [bx, s.y1, bz, u0, v1], [ax, s.y1, az, u1, v1]];
@@ -626,6 +625,23 @@ export function buildCity(roads, col) {
     const at = signAtlas();
     const sm = new THREE.MeshStandardMaterial({ map: at, emissiveMap: at, emissive: 0xffffff, emissiveIntensity: 0.5, roughness: 0.45 });
     const smesh = new THREE.Mesh(sg, sm); smesh.matrixAutoUpdate = false; grp.add(smesh);
+  }
+  // canopies: OSM parts that start well above the ground with nothing under them (bus-terminal roofs, entrance
+  // canopies) stood on nothing; give them steel columns along the edge and on a grid inside
+  {
+    const inPoly = (x, z, p) => { let c = false; for (let i = 0, j = p.length - 1; i < p.length; j = i++) if (((p[i][1] > z) !== (p[j][1] > z)) && (x < (p[j][0] - p[i][0]) * (z - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0])) c = !c; return c; };
+    const colsG = [];
+    for (const b of list) {
+      if (b.mh < 2.5) continue;
+      const under = list.some(o => o !== b && o.mh < b.mh - 1 && o.H >= b.mh - 1 && inPoly(b.c[0], b.c[1], o.p));
+      if (under) continue;
+      const pts = []; const p = b.p;
+      for (let i = 0; i < p.length; i++) { const a = p[i], q = p[(i + 1) % p.length], L = Math.hypot(q[0] - a[0], q[1] - a[1]), n = Math.max(1, Math.round(L / 7)); for (let k = 0; k < n; k++) { const t = k / n; const nx = (q[1] - a[1]) / (L || 1), nz = -(q[0] - a[0]) / (L || 1); pts.push([a[0] + (q[0] - a[0]) * t - nx * 0.6, a[1] + (q[1] - a[1]) * t - nz * 0.6]); } }
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const [x, z] of p) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+      for (let x = x0 + 9; x < x1 - 4; x += 9) for (let z = z0 + 9; z < z1 - 4; z += 9) if (inPoly(x, z, p)) pts.push([x, z]);
+      for (const [x, z] of pts) { if (!inPoly(x, z, p)) continue; colsG.push(new THREE.BoxGeometry(0.3, b.mh, 0.3).translate(x, b.mh / 2, z).toNonIndexed(), new THREE.BoxGeometry(0.5, 0.25, 0.5).translate(x, b.mh - 0.12, z).toNonIndexed()); col.addPoly([[x - 0.2, z - 0.2], [x + 0.2, z - 0.2], [x + 0.2, z + 0.2], [x - 0.2, z + 0.2]], false); }
+    }
+    if (colsG.length) { const cm = new THREE.Mesh(mergeGeometries(colsG), new THREE.MeshStandardMaterial({ color: 0x5f6568, roughness: 0.45, metalness: 0.6 })); cm.castShadow = cm.receiveShadow = true; grp.add(cm); list.columns = colsG.length / 2; }
   }
   const verts = geo.attributes.position.count;
   return { grp, mesh, mat, list, stats: list.stats, detail: { verts, balconies: balcSlab.length + balcRail.length, signs: signs.length, awnings: awnings.length } };
