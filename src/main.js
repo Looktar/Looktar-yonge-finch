@@ -485,7 +485,10 @@ function update(dt) {
   const bobK = Math.min(1, moving / 4) * (1 - ads * 0.85); const sprintK = sprint && moving > 5 ? 1 : 0;
   const vk = Math.tan(28 * Math.PI / 180) / Math.tan(33 * Math.PI / 180); const hx = ud.hip.x * vk, hy = ud.hip.y * vk, hz = ud.hip.z, ax = -ud.sight.x, ay = -ud.sight.y, az = ud.adsZ - ud.sight.z; const vo = feel.vm();
   w.vm.position.set(hx + (ax - hx) * ads + Math.sin(player.bob) * 0.012 * bobK + sprintK * 0.03, hy + (ay - hy) * ads - Math.abs(Math.cos(player.bob)) * 0.01 * bobK - rl * 0.08 - S.swap * 0.6 - sprintK * 0.03, hz + (az - hz) * ads + vo.z * (1 - ads * 0.5)); w.vm.position.x += vo.x * (1 - ads * 0.6); w.vm.position.y += vo.y * (1 - ads * 0.6);
-  w.vm.rotation.set(vo.rx * (1 - ads * 0.6) + rl * 0.5 - sprintK * 0.35, (1 - ads) * (ud.hipYaw || 0.07) + sprintK * 0.55 + vo.ry * (1 - ads * 0.6), (1 - ads) * (ud.hipRoll || 0) + rl * 0.6 + sprintK * 0.25 + vo.rz * (1 - ads * 0.5));
+  // the barrel converges on the crosshair: aim the bore line from the muzzle's place on screen at a point 18 m down
+  // the view axis (a hip yaw that only showed off the gun's side sent the barrel well left of the crosshair)
+  const convYaw = Math.atan2(hx, 18), convPitch = Math.atan2(-(hy + ud.muzzle.y), 18);
+  w.vm.rotation.set(vo.rx * (1 - ads * 0.6) + rl * 0.5 - sprintK * 0.35 + (1 - ads) * convPitch, (1 - ads) * convYaw + sprintK * 0.55 + vo.ry * (1 - ads * 0.6), (1 - ads) * (ud.hipRoll || 0) + rl * 0.6 + sprintK * 0.25 + vo.rz * (1 - ads * 0.5));
   if (ud.mag) { ud.mag.position.y = -Math.max(0, Math.sin(rp * Math.PI * 1.0)) * 0.22 * (rp > 0.2 && rp < 0.85 ? 1 : Math.max(0, Math.sin(rp * Math.PI))); }
   if (ud.pump) { const pa = S.fireT > 0 && w.cas === 1 ? Math.sin(Math.max(0, Math.min(1, (w.rate - S.fireT) / 0.45)) * Math.PI) : 0; ud.pump.position.z = pa * 0.08; }
   if (ud.slide) ud.slide.position.z = S.fireAnim * 0.025;

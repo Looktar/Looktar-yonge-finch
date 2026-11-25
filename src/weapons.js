@@ -208,7 +208,7 @@ export function buildRifle() {
   g.add(forearm([-0.05, -0.03, -0.29], [-0.2, -0.24, -0.02], K.sleeve));
   g.traverse(o => o.frustumCulled = false);
   ensureKit(g);
-  Object.assign(g.userData, { muzzle: new THREE.Vector3(0, hv, -0.67), eject: new THREE.Vector3(0.02, 0.03, -0.1), sight: new THREE.Vector3(0, dotV + 0.004, -0.12), mag, hip: new THREE.Vector3(0.235, -0.175, -0.45), hipYaw: 0.3, hipRoll: 0.07, adsZ: -0.2, fov: 52 }); // framed like Saltline's carbine: big in the lower right, muzzle just under the crosshair
+  Object.assign(g.userData, { muzzle: new THREE.Vector3(0, hv, -0.67), eject: new THREE.Vector3(0.02, 0.03, -0.1), sight: new THREE.Vector3(0, dotV + 0.004, -0.12), mag, hip: new THREE.Vector3(0.2, -0.165, -0.45), hipRoll: 0.12, adsZ: -0.2, fov: 52 }); // framed like Saltline's carbine: big in the lower right, muzzle just under the crosshair
   return g;
 }
 
