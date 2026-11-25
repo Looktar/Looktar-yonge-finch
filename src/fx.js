@@ -49,9 +49,9 @@ export function makeSky() {
     side: THREE.BackSide, depthWrite: false, fog: false, uniforms: { uSun: { value: SUN.clone() } },
     vertexShader: 'varying vec3 vD; void main(){ vD=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
     fragmentShader: `varying vec3 vD; uniform vec3 uSun;
-      // Apple GPUs return NaN for pow() of a value a hair below zero; one NaN texel in the sky is blurred by PMREM over
-      // the whole environment map and every PBR surface sampling it goes black, so the inputs are clamped and the
-      // output is scrubbed bit-wise (isnan() can be optimised away by fast math)
+      /* Apple GPUs return NaN for pow() of a value a hair below zero; one NaN texel in the sky is blurred by PMREM over */
+      /* the whole environment map and every PBR surface sampling it goes black, so the inputs are clamped and the */
+      /* output is scrubbed bit-wise (isnan() can be optimised away by fast math) */
       float fin(float x){ return ((floatBitsToUint(x) & 0x7f800000u) == 0x7f800000u) ? 0.0 : clamp(x, 0.0, 60.0); }
       float hh(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5); }
       float vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(hh(i),hh(i+vec2(1,0)),f.x), mix(hh(i+vec2(0,1)),hh(i+vec2(1,1)),f.x), f.y); }
@@ -66,8 +66,8 @@ export function makeSky() {
         c = mix(c, zen, smoothstep(0.25, 0.95, y));
         c += vec3(1.0, 0.55, 0.25) * pow(s, 6.0) * 0.55 + vec3(1.0, 0.72, 0.42) * pow(s, 60.0) * 1.4;
         c += vec3(14.0, 9.0, 5.0) * smoothstep(0.99955, 0.9998, s);
-        // broken stratocumulus deck (late-November Toronto): dark violet undersides, edges and thin parts lit
-        // orange by the sun just under the deck; plus high cirrus streaks catching the last light
+        /* broken stratocumulus deck (late-November Toronto): dark violet undersides, edges and thin parts lit */
+        /* orange by the sun just under the deck; plus high cirrus streaks catching the last light */
         vec2 cp = d.xz / max(y + 0.07, 0.02);
         float wq = fbm(cp * 1.3 + vec2(1.7, 9.2));
         float n = fbm(cp * 2.2 + wq * 1.8 + vec2(5.0, 2.0));
@@ -81,7 +81,7 @@ export function makeSky() {
         float ci = fbm(hp * vec2(0.3, 1.6) + vec2(3.0, 1.0)); ci = smoothstep(0.55, 0.8, ci) * smoothstep(0.05, 0.3, y) * (1.0 - smoothstep(0.6, 0.95, y));
         c = mix(c, mix(vec3(0.62, 0.45, 0.56), vec3(1.45, 0.7, 0.36), pow(az, 1.4)), ci * 0.5);
         c = mix(c, deck, dens * 0.93);
-        // warm haze band hugging the horizon
+        /* warm haze band hugging the horizon */
         c = mix(c, hor * 1.05, (1.0 - smoothstep(0.0, 0.06, y)) * 0.6);
         if (y < 0.0) c = mix(hor * 0.8, vec3(0.16, 0.14, 0.15), smoothstep(0.0, -0.2, y));
         gl_FragColor = vec4(fin(c.r), fin(c.g), fin(c.b), 1.0);

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { Kit, ensureKit, chamferBox, lathe, sideExtrude, sectionExtrude, tube, roundRect, bez, polygon } from './kit.js';
+import { kitMaterial } from './surf.js';
 
 // Viewmodels built from real-proportion side profiles, extruded with bevels.
 // Gun space: -Z toward the muzzle, +Y up, +X to the shooter's right, metres.
@@ -41,8 +43,6 @@ function prof(pts, width, bevel = 0.0025, holes = []) {
 }
 const cylZ = (r0, r1, u0, u1, v, seg = 16, x = 0) => { const g = new THREE.CylinderGeometry(r1, r0, u1 - u0, seg); g.rotateX(-Math.PI / 2); g.translate(x, v, -(u0 + u1) / 2); return g; };
 const boxU = (w, h, u0, u1, v, x = 0, r = 0) => { const g = r ? new RoundedBoxGeometry(w, h, u1 - u0, 2, r) : new THREE.BoxGeometry(w, h, u1 - u0); g.translate(x, v, -(u0 + u1) / 2); return g; };
-const roundRect = (u0, v0, u1, v1, r, n = 4) => { const p = []; const c = [[u1 - r, v1 - r, 0], [u0 + r, v1 - r, Math.PI / 2], [u0 + r, v0 + r, Math.PI], [u1 - r, v0 + r, Math.PI * 1.5]]; for (const [cu, cv, a0] of c) for (let i = 0; i <= n; i++) { const a = a0 + i / n * Math.PI / 2; p.push([cu + Math.cos(a) * r, cv + Math.sin(a) * r]); } return p; };
-const bez = (a, b, c, n = 8) => { const p = []; for (let i = 0; i <= n; i++) { const t = i / n; p.push([(1 - t) ** 2 * a[0] + 2 * (1 - t) * t * b[0] + t * t * c[0], (1 - t) ** 2 * a[1] + 2 * (1 - t) * t * b[1] + t * t * c[1]]); } return p; };
 const M = (geoms, mat) => { const m = new THREE.Mesh(mergeGeometries(geoms.map(g => g.index ? g.toNonIndexed() : g)), mat); m.frustumCulled = false; return m; };
 
 function reticleTex() { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,60,40,1)'); gr.addColorStop(0.12, 'rgba(255,40,30,0.9)'); gr.addColorStop(0.3, 'rgba(255,20,10,0.15)'); gr.addColorStop(1, 'rgba(255,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); }
@@ -73,8 +73,8 @@ function wetGun(mat, size = 140) {
 }
 
 // ---------- hands ----------
-function hand(side, curl = 1) { // fist shape around a vertical grip, palm facing -x for right hand
-  const m = mats(); const g = new THREE.Group();
+function hand(side, curl = 1, gloveMat = null) { // fist shape around a vertical grip, palm facing -x for right hand
+  const m = Object.assign({}, mats()); if (gloveMat) m.glove = gloveMat; const g = new THREE.Group();
   const palm = new THREE.Mesh(new RoundedBoxGeometry(0.03, 0.085, 0.075, 3, 0.012), m.glove); g.add(palm);
   for (let i = 0; i < 4; i++) { // fingers wrap around the front of the grip
     const f = new THREE.Group(); f.position.set(-side * 0.004, 0.03 - i * 0.021, -0.036);
@@ -87,72 +87,120 @@ function hand(side, curl = 1) { // fist shape around a vertical grip, palm facin
   const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.032, 0.04, 12), m.glove); cuff.position.set(side * 0.004, -0.06, 0.01); g.add(cuff);
   g.traverse(o => o.frustumCulled = false); return g;
 }
-function forearm(from, to) { // sleeve from wrist (from) to elbow (to)
-  const m = mats(); const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to); const L = a.distanceTo(b);
+function forearm(from, to, mat = null) { // sleeve from wrist (from) to elbow (to)
+  const m = Object.assign({}, mats()); if (mat) m.sleeve = mat; const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to); const L = a.distanceTo(b);
   const geo = new THREE.CylinderGeometry(0.033, 0.043, L, 14, 4); const pos = geo.attributes.position; for (let i = 0; i < pos.count; i++) { const y = pos.getY(i); const ang = Math.atan2(pos.getZ(i), pos.getX(i)); const wr = 1 + Math.sin(ang * 3 + y * 40) * 0.05; pos.setX(i, pos.getX(i) * wr); pos.setZ(i, pos.getZ(i) * wr); } geo.computeVertexNormals();
   const me = new THREE.Mesh(geo, m.sleeve); me.position.copy(a).add(b).multiplyScalar(0.5); me.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), a.clone().sub(b).normalize()); me.frustumCulled = false; return me;
 }
 
-// ---------- AR-15 style carbine with red dot ----------
+// ---------- AR-15 style carbine with holographic sight, built as a Saltline-style part list ----------
+// u = distance forward of the receiver's rear face (gun -Z), v = up, x = right. Every part is a bevelled primitive
+// with its own AO tint and edge-wear weight; parts are merged per material (one draw call each).
+let KM = null;
+function kmats() {
+  if (KM) return KM;
+  KM = {
+    anod: kitMaterial('anod', { scale: 9, wear: 0.9, normal: 0.15, wearColor: 0x7d8186, drops: 150, envMapIntensity: 1.2 }),
+    park: kitMaterial('park', { scale: 11, wear: 0.7, normal: 0.2, wearColor: 0x6f7173, drops: 150, envMapIntensity: 1.3 }),
+    fde: kitMaterial('poly', { color: 0x7a6748, scale: 10, normal: 0.45, wear: 0.5, wearColor: 0x9c8a68, wearRough: 0.55, wearMetal: 0, drops: 150 }),
+    blk: kitMaterial('poly', { color: 0x2a2a2b, scale: 10, normal: 0.5, wear: 0.4, wearColor: 0x454546, wearRough: 0.55, wearMetal: 0 }),
+    rub: kitMaterial('rubber', { scale: 10, wear: 0 }),
+    hole: new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.9, metalness: 0 }), // fake recesses
+    glove: kitMaterial('cloth', { color: 0x24251f, scale: 14, wear: 0, normal: 0.8 }),
+    sleeve: kitMaterial('cloth', { color: 0x33352b, scale: 9, wear: 0, normal: 0.6 }),
+    lens: new THREE.MeshStandardMaterial({ color: 0xc9d2d6, roughness: 0.15, metalness: 0.2, emissive: 0x1a1d1f }),
+  };
+  return KM;
+}
 export function buildRifle() {
-  const m = mats(); const g = new THREE.Group();
-  // upper receiver
-  g.add(M([prof([[0, 0], [0.19, 0], [0.19, 0.052], [0.165, 0.056], [0.03, 0.056], [0.0, 0.05]], 0.026)], m.metal));
-  g.add(M([boxU(0.006, 0.02, 0.06, 0.14, 0.03, 0.014), cylZ(0.008, 0.008, 0.012, 0.035, 0.035, 10, 0.017)], m.steel)); // ejection port cover, forward assist
-  // lower receiver with magwell and trigger guard
-  g.add(M([prof([[0.005, 0], [0.19, 0], [0.19, -0.02], [0.172, -0.024], [0.172, -0.08], [0.104, -0.08], [0.1, -0.03], [0.04, -0.03], [0.005, -0.022]], 0.024),
-    prof([[0.035, -0.03], [0.1, -0.03], [0.1, -0.05], [0.04, -0.052], [0.035, -0.045]], 0.012, 0.0015, [roundRect(0.043, -0.047, 0.094, -0.033, 0.004)])], m.metal));
-  g.add(M([prof(bez([0.064, -0.033], [0.058, -0.045], [0.068, -0.05], 6).concat([[0.072, -0.049], [0.066, -0.033]]), 0.006, 0.001)], m.steel)); // trigger
-  // pistol grip (FDE)
-  g.add(M([prof([[0.042, -0.026], [0.012, -0.026], [-0.03, -0.125], [-0.022, -0.133], [0.014, -0.132], [0.024, -0.12], [0.012, -0.1], [0.04, -0.048]], 0.03, 0.004)], m.fde));
-  // curved magazine (FDE polymer)
-  const front = bez([0.17, -0.078], [0.172, -0.16], [0.21, -0.245], 10), back = bez([0.106, -0.078], [0.11, -0.16], [0.142, -0.238], 10).reverse();
-  const mag = M([prof(front.concat([[0.212, -0.256], [0.14, -0.25]], back), 0.021, 0.003), boxU(0.026, 0.012, 0.135, 0.215, -0.254, 0, 0.004).rotateX(0)], m.fde); g.add(mag);
-  // free-float handguard with M-LOK slots
-  const slots = []; for (let i = 0; i < 6; i++) { const u0 = 0.215 + i * 0.047; slots.push(roundRect(u0, 0.004, u0 + 0.03, 0.016, 0.004)); slots.push(roundRect(u0, -0.022, u0 + 0.03, -0.01, 0.004)); }
-  g.add(M([prof([[0.19, -0.034], [0.5, -0.034], [0.505, -0.028], [0.505, 0.05], [0.5, 0.056], [0.19, 0.056]], 0.046, 0.005, slots)], m.metal));
-  // top rail with teeth
-  const rail = [boxU(0.021, 0.008, 0.005, 0.5, 0.06)]; for (let u = 0.01; u < 0.495; u += 0.01) rail.push(boxU(0.021, 0.005, u, u + 0.005, 0.0665));
-  g.add(M(rail, m.metal));
-  // barrel, gas block, muzzle brake
-  g.add(M([cylZ(0.0095, 0.0095, 0.19, 0.62, 0.016, 14), cylZ(0.0145, 0.0145, 0.60, 0.665, 0.016, 12), boxU(0.024, 0.024, 0.43, 0.46, 0.022)], m.steel));
-  g.add(M([boxU(0.031, 0.004, 0.612, 0.62, 0.016), boxU(0.031, 0.004, 0.628, 0.636, 0.016), boxU(0.031, 0.004, 0.644, 0.652, 0.016)], m.rubber));
-  // buffer tube + stock (FDE) + butt pad
-  const stock = new THREE.Group(); stock.visible = false; g.add(stock); // out of frame in Saltline-style framing; kept for ADS / future use
-  stock.add(M([cylZ(0.016, 0.016, -0.2, 0.0, 0.024, 16)], m.metal));
-  stock.add(M([prof([[-0.12, 0.044], [-0.29, 0.05], [-0.3, 0.046], [-0.3, -0.07], [-0.27, -0.072], [-0.21, -0.02], [-0.13, 0.0], [-0.12, 0.004]], 0.04, 0.005)], m.fde));
-  stock.add(M([boxU(0.042, 0.122, -0.315, -0.298, -0.012, 0, 0.004)], m.rubber));
-  // charging handle
-  g.add(M([boxU(0.05, 0.008, -0.012, 0.004, 0.05, 0, 0.002)], m.metal));
-  // folded back-up sights
-  g.add(M([boxU(0.02, 0.012, 0.47, 0.49, 0.072), boxU(0.02, 0.012, 0.02, 0.04, 0.072)], m.metal));
-  // red dot sight: mount + tube + lenses + reticle
-  const dotV = 0.106, du0 = 0.07, du1 = 0.175;
-  // holographic sight (EOTech-style box, as on Saltline's carbine): base with battery tray, hood over the window,
-  // side buttons; the window is a thin glass pane with the reticle floating in it
-  g.add(M([boxU(0.034, 0.016, 0.06, 0.175, 0.074, 0, 0.003),
-    boxU(0.006, 0.05, 0.068, 0.172, dotV - 0.004, -0.0185, 0.002), boxU(0.006, 0.05, 0.068, 0.172, dotV - 0.004, 0.0185, 0.002),
-    boxU(0.043, 0.007, 0.064, 0.176, dotV + 0.024, 0, 0.003),
-    boxU(0.03, 0.012, 0.16, 0.176, dotV - 0.018, 0, 0.002),
-    boxU(0.03, 0.012, 0.064, 0.08, dotV - 0.018, 0, 0.002)], m.metal));
-  g.add(M([boxU(0.008, 0.008, 0.085, 0.097, 0.075, 0.021, 0.002), boxU(0.008, 0.008, 0.1, 0.112, 0.075, 0.021, 0.002), boxU(0.01, 0.012, 0.13, 0.15, 0.075, -0.022, 0.003)], m.rubber));
-  { const pane = new THREE.PlaneGeometry(0.03, 0.034); pane.translate(0, dotV, -(du1 - 0.004)); g.add(new THREE.Mesh(pane, m.glass)); const p2 = new THREE.PlaneGeometry(0.03, 0.034); p2.translate(0, dotV, -(du0 + 0.008)); g.add(new THREE.Mesh(p2, m.glass)); }
-  // weapon light on the right side of the handguard: body, knurled bezel, lens
-  { const lx = 0.032, lv = 0.008, l0 = 0.39, l1 = 0.48; const parts = [cylZ(0.0115, 0.0115, l0, l1, lv, 18, lx), cylZ(0.0135, 0.0135, l1, l1 + 0.022, lv, 18, lx), boxU(0.01, 0.018, l0 + 0.02, l0 + 0.06, lv, lx - 0.012, 0.002)];
-    for (let k = 0; k < 10; k++) parts.push(cylZ(0.0142, 0.0142, l1 + 0.002 + k * 0.002, l1 + 0.003 + k * 0.002, lv, 18, lx)); g.add(M(parts, m.metal));
-    const lens = new THREE.CircleGeometry(0.011, 18); lens.translate(lx, lv, -(l1 + 0.0225)); g.add(new THREE.Mesh(lens, new THREE.MeshStandardMaterial({ color: 0x9aa4a8, roughness: 0.35, metalness: 0.1 }))); }
-  // laser-etched markings on the lower receiver (both sides)
-  { const mk = markTex(); for (const sx of [1, -1]) { const pl = new THREE.PlaneGeometry(0.11, 0.022); pl.rotateY(sx * Math.PI / 2); pl.translate(sx * 0.0125, -0.012, -0.12); g.add(new THREE.Mesh(pl, new THREE.MeshStandardMaterial({ map: mk, transparent: true, roughness: 0.6, metalness: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }))); } }
+  const m = mats(), K = kmats(), kit = new Kit(), magKit = new Kit();
+  const B = (w, h, u0, u1, v, x = 0, o = {}) => kit.add(chamferBox(w, h, u1 - u0, o.c ?? Math.min(w, h, u1 - u0) * 0.18), o.mat || K.anod, { at: [x, v, -(u0 + u1) / 2], rot: o.rot, ao: o.ao ?? 1, edge: o.edge ?? 1 });
+  const Lz = (prof, x, v, mat, o = {}) => kit.add(lathe(prof, o.seg || 20), mat, { at: [x, v, 0], ao: o.ao ?? 1 }); // along the bore
+  const Lx = (prof, x, v, u, mat, o = {}) => kit.add(lathe(prof, o.seg || 16), mat, { at: [x, v, -u], rot: [0, Math.sign(x || 1) * -Math.PI / 2, 0], ao: o.ao ?? 1 }); // pointing out of the side
+  // --- upper receiver ---
+  kit.add(sideExtrude([[0, 0], [0.19, 0], [0.19, 0.05], [0.172, 0.056], [0.022, 0.056], [0, 0.048]], 0.027, 0.0025), K.anod);
+  B(0.0016, 0.017, 0.074, 0.136, 0.031, 0.0133, { mat: K.hole, edge: 0 }); // ejection port
+  B(0.0022, 0.011, 0.08, 0.13, 0.031, 0.0118, { mat: K.park, ao: 0.55 }); // bolt carrier seen through it
+  kit.add(chamferBox(0.0016, 0.018, 0.068, 0.0005), K.anod, { at: [0.0155, 0.0115, -0.105], rot: [0, 0, 0.5], ao: 0.85 }); // dust cover, swung open
+  Lz([[0, 0.07], [0.0016, 0.07], [0.0016, 0.14], [0, 0.14]], 0.0136, 0.021, K.park, { seg: 8 }); // its hinge rod
+  B(0.009, 0.016, 0.136, 0.156, 0.043, 0.0165, { c: 0.003 }); // brass deflector
+  B(0.012, 0.014, 0.004, 0.034, 0.038, 0.017, { c: 0.003 }); // forward-assist housing
+  Lz([[0, 0.0], [0.0068, 0.0], [0.0072, 0.003], [0.0072, 0.012], [0.0064, 0.0135], [0.0064, 0.016], [0.0072, 0.0175], [0.0072, 0.024], [0, 0.026]], 0.022, 0.038, K.park, { seg: 18 }); // forward assist plunger
+  B(0.048, 0.008, -0.014, 0.006, 0.051, 0, { c: 0.002 }); B(0.012, 0.007, -0.012, 0.004, 0.051, 0.027, { c: 0.002 }); // charging handle + latch
+  // --- lower receiver ---
+  kit.add(sideExtrude([[0.005, 0], [0.19, 0], [0.19, -0.02], [0.176, -0.024], [0.174, -0.08], [0.102, -0.08], [0.098, -0.03], [0.04, -0.03], [0.005, -0.022]], 0.025, 0.0022), K.anod);
+  B(0.031, 0.008, 0.096, 0.18, -0.077, 0, { c: 0.003 }); // flared magwell lip
+  kit.add(sideExtrude([[0.035, -0.03], [0.1, -0.03], [0.1, -0.05], [0.04, -0.052], [0.035, -0.045]], 0.012, 0.0015, [roundRect(0.043, -0.047, 0.094, -0.033, 0.004)]), K.anod); // trigger guard
+  kit.add(sideExtrude(bez([0.064, -0.033], [0.058, -0.045], [0.068, -0.05], 6).concat([[0.072, -0.049], [0.066, -0.033]]), 0.006, 0.001), K.park); // trigger
+  for (const u of [0.012, 0.172]) for (const sx of [1, -1]) Lx([[0, 0], [0.0052, 0], [0.0052, 0.0012], [0.0042, 0.002], [0, 0.002]], sx * 0.0125, -0.011, u, K.park, { seg: 14 }); // takedown / pivot pins
+  Lx([[0, 0], [0.0085, 0], [0.0085, 0.0018], [0.007, 0.0028], [0, 0.0028]], -0.0125, -0.006, 0.052, K.anod); // safety selector disc
+  kit.add(chamferBox(0.003, 0.006, 0.026, 0.001), K.anod, { at: [-0.0148, -0.0085, -0.044], rot: [0.5, 0, 0] }); // selector lever
+  Lx([[0, 0], [0.0055, 0], [0.0055, 0.0025], [0.0045, 0.0035], [0, 0.0035]], 0.0125, -0.017, 0.104, K.park, { seg: 14 }); // magazine release
+  B(0.003, 0.016, 0.1, 0.116, -0.003, -0.0135, { c: 0.001 }); // bolt catch paddle
+  // --- pistol grip ---
+  kit.add(sideExtrude([[0.042, -0.026], [0.012, -0.026], [-0.03, -0.125], [-0.024, -0.134], [0.012, -0.133], [0.024, -0.12], [0.014, -0.1], [0.024, -0.086], [0.04, -0.048]], 0.031, 0.0055, [], 3), K.blk);
+  // --- magazine (its own mesh: it drops out on reload) ---
+  { const front = bez([0.17, -0.078], [0.172, -0.16], [0.21, -0.245], 12), back = bez([0.106, -0.078], [0.11, -0.16], [0.142, -0.238], 12).reverse();
+    magKit.add(sideExtrude(front.concat([[0.212, -0.256], [0.14, -0.25]], back), 0.0225, 0.0028, [], 3), K.fde);
+    for (let i = 0; i < 4; i++) { const v = -0.088 - i * 0.008; magKit.add(chamferBox(0.0245, 0.0035, 0.06, 0.001), K.fde, { at: [0, v, -0.139 - i * 0.0009], ao: 0.9 }); } // grip ribs
+    magKit.add(chamferBox(0.028, 0.012, 0.082, 0.004), K.fde, { at: [0, -0.255, -0.176], rot: [-0.14, 0, 0] }); // floor plate
+    magKit.add(chamferBox(0.0236, 0.003, 0.05, 0.001), K.hole, { at: [0, -0.15, -0.136], rot: [-0.08, 0, 0], ao: 0.5, edge: 0 }); // window slot (fake)
+  }
+  // --- free-float M-LOK handguard: hollow octagon with slots and a front cap ---
+  const hv = 0.014, hr = 0.0315, ap = hr * Math.cos(Math.PI / 8);
+  kit.add(sectionExtrude(polygon(8, hr, Math.PI / 8), 0.19, 0.505, 0.0022, [polygon(8, hr - 0.0035, Math.PI / 8)]), K.anod, { at: [0, hv, 0] });
+  for (const ang of [0, Math.PI, -Math.PI / 4, -3 * Math.PI / 4, Math.PI / 4, 3 * Math.PI / 4]) for (let i = 0; i < 6; i++) {
+    if ((ang === Math.PI / 4 || ang === 3 * Math.PI / 4) && i % 2) continue;
+    const u = 0.225 + i * 0.046; kit.add(chamferBox(0.0016, 0.0074, 0.032, 0.0006), K.hole, { at: [Math.cos(ang) * (ap - 0.0004), hv + Math.sin(ang) * (ap - 0.0004), -(u + 0.016)], rot: [0, 0, ang], edge: 0 });
+  }
+  Lz([[hr * 0.98, 0.503], [hr * 1.02, 0.503], [hr * 1.02, 0.511], [0.012, 0.511], [0.012, 0.506]], 0, hv, K.anod, { seg: 8 }); // end cap
+  for (const u of [0.24, 0.45]) for (const sx of [1, -1]) Lx([[0, 0], [0.0035, 0], [0.0035, 0.0012], [0, 0.0016]], sx * (ap + 0.0002), hv, u, K.park, { seg: 10 }); // barrel-nut screws
+  Lx([[0.006, 0], [0.0085, 0], [0.0085, 0.003], [0.006, 0.003]], -(ap + 0.0002), hv - 0.008, 0.21, K.park, { seg: 16 }); // QD sling cup
+  // --- Picatinny rail: base, 49 teeth, cross slots ---
+  B(0.021, 0.0055, 0.004, 0.5, 0.0595, 0, { c: 0.0012 });
+  for (let i = 0; i < 49; i++) { const u = 0.008 + i * 0.01; B(0.0212, 0.0034, u, u + 0.0052, 0.0637, 0, { c: 0.0008, edge: 0.35 }); }
+  // --- barrel and muzzle brake ---
+  Lz([[0, 0.19], [0.0098, 0.19], [0.0098, 0.52], [0.0088, 0.53], [0.0088, 0.598], [0, 0.598]], 0, hv, K.park);
+  Lz([[0.0088, 0.596], [0.0112, 0.596], [0.012, 0.6], [0.012, 0.658], [0.0112, 0.666], [0.0062, 0.666], [0.0055, 0.662], [0.0055, 0.64]], 0, hv, K.park, { seg: 24 }); // brake with bore
+  Lz([[0.0088, 0.592], [0.0118, 0.592], [0.0118, 0.597], [0.0088, 0.597]], 0, hv, K.park, { seg: 18 }); // crush washer
+  for (let i = 0; i < 3; i++) for (const sx of [1, -1]) B(0.0014, 0.0068, 0.61 + i * 0.016, 0.62 + i * 0.016, hv, sx * 0.0115, { mat: K.hole, edge: 0 }); // side ports
+  // --- holographic sight: base, body, arched hood (a frame tube), glass, buttons, battery cap, mount lever ---
+  const dotV = 0.106;
+  B(0.034, 0.012, 0.058, 0.176, 0.0715, 0, { c: 0.002 });
+  B(0.04, 0.02, 0.064, 0.176, 0.086, 0, { c: 0.004 });
+  kit.add(sectionExtrude(roundRect(-0.0225, 0.078, 0.0225, 0.134, 0.007), 0.07, 0.172, 0.0022, [roundRect(-0.0172, 0.092, 0.0172, 0.127, 0.0045)]), K.anod);
+  Lz([[0, 0.168], [0.0085, 0.168], [0.0085, 0.184], [0.0078, 0.186], [0, 0.186]], 0.0, 0.085, K.anod, { seg: 22 }); // battery cap (front)
+  for (let k = 0; k < 6; k++) Lz([[0.0082, 0.1705 + k * 0.0025], [0.0089, 0.1712 + k * 0.0025], [0.0082, 0.172 + k * 0.0025]], 0, 0.085, K.anod, { seg: 22 }); // knurl rings
+  B(0.009, 0.009, 0.072, 0.082, 0.082, 0.021, { mat: K.rub, c: 0.002 }); B(0.009, 0.009, 0.085, 0.095, 0.082, 0.021, { mat: K.rub, c: 0.002 }); // buttons
+  kit.add(chamferBox(0.005, 0.009, 0.034, 0.0015), K.park, { at: [-0.0215, 0.07, -0.12], rot: [0.12, 0, 0] }); // cross-bolt lever
+  for (const u of [0.08, 0.16]) Lx([[0, 0], [0.004, 0], [0.004, 0.0018], [0.0028, 0.003], [0, 0.003]], 0.017, 0.07, u, K.park, { seg: 12 }); // mount screws
+  { const pane = new THREE.PlaneGeometry(0.034, 0.035); pane.translate(0, (0.092 + 0.127) / 2, -0.171); kit.add(pane, m.glass); const p2 = pane.clone(); p2.translate(0, 0, 0.098); kit.add(p2, m.glass); }
+  // --- weapon light on the right flat: lathe body, knurled bezel, lens, mount, cable to a tape switch ---
+  { const lx = 0.043, lv = hv - 0.004, l0 = 0.39;
+    B(0.012, 0.014, l0 + 0.02, l0 + 0.06, lv, lx - 0.012, { c: 0.002 });
+    Lz([[0, l0], [0.0095, l0], [0.0105, l0 + 0.004], [0.0105, l0 + 0.07], [0.0125, l0 + 0.074], [0.0128, l0 + 0.1], [0.0118, l0 + 0.103], [0.009, l0 + 0.103]], lx, lv, K.anod, { seg: 24 });
+    for (let k = 0; k < 9; k++) Lz([[0.0128, l0 + 0.077 + k * 0.0025], [0.0135, l0 + 0.078 + k * 0.0025], [0.0128, l0 + 0.079 + k * 0.0025]], lx, lv, K.anod, { seg: 24 });
+    const lens = new THREE.CircleGeometry(0.0092, 24); lens.rotateY(Math.PI); kit.add(lens, K.lens, { at: [lx, lv, -(l0 + 0.1015)] });
+    Lz([[0, l0 - 0.012], [0.004, l0 - 0.012], [0.004, l0], [0, l0]], lx, lv, K.rub, { seg: 10 }); // tail cap
+    kit.add(tube([[lx, lv, -(l0 - 0.012)], [lx + 0.004, lv - 0.006, -(l0 - 0.03)], [lx - 0.004, hv - 0.026, -(l0 - 0.06)], [0.0, hv - 0.033, -(l0 - 0.1)], [-0.02, hv - 0.026, -(l0 - 0.13)]], 0.0017, 6, 28), K.rub);
+    kit.add(chamferBox(0.006, 0.014, 0.05, 0.002), K.rub, { at: [-(ap + 0.002), hv - 0.012, -(l0 - 0.15)], rot: [0, 0, -0.39] }); } // tape switch
+  // --- folded back-up sights on the rail ---
+  B(0.024, 0.013, 0.47, 0.492, 0.071, 0, { c: 0.002 }); B(0.024, 0.013, 0.018, 0.04, 0.071, 0, { c: 0.002 });
+  // --- laser-etched markings, reticle ---
+  { const mk = markTex(); for (const sx of [1, -1]) { const pl = new THREE.PlaneGeometry(0.11, 0.022); pl.rotateY(sx * Math.PI / 2); pl.translate(sx * 0.0128, -0.012, -0.12); kit.add(pl, new THREE.MeshStandardMaterial({ map: mk, transparent: true, roughness: 0.6, metalness: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })); } }
+  const g = kit.build('rifle'); g.userData.parts = kit.parts + magKit.parts;
+  const mag = magKit.build('mag'); g.add(mag);
   RET = RET || reticleTex();
   const ret = new THREE.Mesh(new THREE.PlaneGeometry(0.0045, 0.0045), new THREE.MeshBasicMaterial({ map: RET, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-  ret.position.set(0, dotV, -(du1 - 0.01)); g.add(ret);
+  ret.position.set(0, dotV + 0.004, -0.16); g.add(ret);
   // hands & sleeves
-  const rh = hand(1); rh.position.set(0.0, -0.075, -0.0); rh.rotation.set(-0.42, 0, 0); g.add(rh);
-  const lh = hand(-1, 0.9); lh.position.set(-0.04, -0.012, -0.36); lh.rotation.set(Math.PI / 2, 0, -0.35); g.add(lh);
-  g.add(forearm([0.02, -0.13, 0.03], [0.1, -0.26, 0.26]));
-  g.add(forearm([-0.05, -0.03, -0.29], [-0.2, -0.24, -0.02]));
+  const rh = hand(1, 1, K.glove); rh.position.set(0.0, -0.075, -0.0); rh.rotation.set(-0.42, 0, 0); g.add(rh);
+  const lh = hand(-1, 0.9, K.glove); lh.position.set(-0.04, -0.012, -0.36); lh.rotation.set(Math.PI / 2, 0, -0.35); g.add(lh);
+  g.add(forearm([0.02, -0.13, 0.03], [0.1, -0.26, 0.26], K.sleeve));
+  g.add(forearm([-0.05, -0.03, -0.29], [-0.2, -0.24, -0.02], K.sleeve));
   g.traverse(o => o.frustumCulled = false);
-  g.userData = { muzzle: new THREE.Vector3(0, 0.016, -0.67), eject: new THREE.Vector3(0.02, 0.03, -0.1), sight: new THREE.Vector3(0, dotV, -0.12), mag, hip: new THREE.Vector3(0.27, -0.22, -0.5), hipYaw: 0.34, hipRoll: 0.08, adsZ: -0.2, fov: 52 }; // canted to show the rail and sight side-on, like Saltline's carbine
+  ensureKit(g);
+  Object.assign(g.userData, { muzzle: new THREE.Vector3(0, hv, -0.67), eject: new THREE.Vector3(0.02, 0.03, -0.1), sight: new THREE.Vector3(0, dotV + 0.004, -0.12), mag, hip: new THREE.Vector3(0.235, -0.175, -0.45), hipYaw: 0.3, hipRoll: 0.07, adsZ: -0.2, fov: 52 }); // framed like Saltline's carbine: big in the lower right, muzzle just under the crosshair
   return g;
 }
 

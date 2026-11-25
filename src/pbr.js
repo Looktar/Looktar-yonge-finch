@@ -78,7 +78,7 @@ export function wetPatch(sh, damp = '1.0', pud = '1.0') { // GLSL expressions: h
       vec3 Vw = normalize(cameraPosition - vWw); float fres = 0.03 + 0.97 * pow(1.0 - clamp(Vw.y, 0.0, 1.0), 5.0);
       vec2 off = normal.xy * 0.035 * (1.0 - wPud);
       vec3 refl = vec3(0.0);
-      if (uReflOn > 0.5) { // rough wet asphalt stretches reflections vertically (Saltline's long streaks of light)
+      if (uReflOn > 0.5) { /* rough wet asphalt stretches reflections vertically (Saltline's long streaks of light) */
         float st = (1.0 - wPud) * 0.06 * vRuv.w;
         for (int i = 0; i < 6; i++) { float o = (float(i) - 1.0) * st * 0.35; refl += texture2DProj(tRefl, vRuv + vec4(off * vRuv.w, o, 0.0)).rgb; }
         refl /= 6.0;
@@ -110,8 +110,8 @@ export function groundMaterial(mask) {
         vec2 ug = w / ${TILE.grass.toFixed(1)}, uc = w / ${TILE.walk.toFixed(1)};
         vec3 gc = texture2D(uGc, ug).rgb * (0.75 + 0.5 * texture2D(uGc, ug * 0.071 + 0.3).g / 0.32);
         vec3 cc = texture2D(uCc, uc).rgb * (0.86 + 0.28 * texture2D(uCc, uc * 0.083 + 0.7).r / 0.45);
-        cc = mix(vec3(dot(cc, vec3(0.3, 0.55, 0.15))), cc, 0.45) * 1.05; // pale grey Toronto concrete
-        // slab joints every 1.5 m in the paved areas (Toronto sidewalks / plazas)
+        cc = mix(vec3(dot(cc, vec3(0.3, 0.55, 0.15))), cc, 0.45) * 1.05; /* pale grey Toronto concrete */
+        /* slab joints every 1.5 m in the paved areas (Toronto sidewalks / plazas) */
         vec2 jw = fwidth(vGW.xz) + 1e-4; vec2 jj = abs(fract(vGW.xz / 1.5 + 0.5) - 0.5) * 1.5; float joint = 1.0 - min(smoothstep(0.0, 0.012 + jw.x, jj.x), smoothstep(0.0, 0.012 + jw.y, jj.y));
         cc *= 1.0 - 0.16 * joint * (1.0 - smoothstep(0.02, 0.1, max(jw.x, jw.y)));
         diffuseColor.rgb *= mix(gc, cc, gK);

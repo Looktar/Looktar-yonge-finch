@@ -14,6 +14,7 @@ import { buildWorld, makeTextures, EXT, CELL, GN, PLAY_C, PLAY_R, START, rng } f
 import { Particles, makeSky, Sfx, SUN } from './fx.js';
 import { loadZombieAssets, ZombieActor, zombiePose } from './zombie.js';
 import { isTouch, initTouch } from './touch.js';
+import { initSurf } from './surf.js';
 import { buildRifle, buildShotgun, buildPistol, flashTextures, makeFlash, casingGeo, mats } from './weapons.js';
 
 const $ = id => document.getElementById(id);
@@ -28,6 +29,7 @@ try { const s = localStorage.getItem('yf_q'); if (s && QUAL[s]) { Q = QUAL[s]; $
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr));
+initSurf(renderer); // procedural surface families bake on first use
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -49,7 +51,7 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   float fogSun = max(dot(fogWD, vec3(${SUN.x.toFixed(4)}, ${SUN.y.toFixed(4)}, ${SUN.z.toFixed(4)})), 0.0);
   vec3 fogC = mix(fogColor, vec3(1.35, 0.86, 0.48), pow(fogSun, 5.0) * 0.95) * (1.0 + 0.6 * pow(fogSun, 24.0));
   #ifdef FOG_EXP2
-    // height fog: dense near the street, thinning upward (analytic integral of d0 * exp(-h / 28 m) along the ray)
+    /* height fog: dense near the street, thinning upward (analytic integral of d0 * exp(-h / 28 m) along the ray) */
     float fogDist = length(vFogView); float h0 = cameraPosition.y, dh = fogWD.y * fogDist;
     float Hf = 28.0; float k = abs(dh) > 0.01 ? (exp(-h0 / Hf) - exp(-(h0 + dh) / Hf)) * Hf / dh : exp(-h0 / Hf);
     float fogFactor = 1.0 - exp(-fogDensity * fogDist * (0.3 + 1.5 * k));
@@ -134,9 +136,9 @@ const pNorm = new Particles(scene, 1500, false, tex.glow);
 const vmScene = new THREE.Scene(); vmScene.environment = scene.environment; vmScene.environmentIntensity = 1.1;
 const vmCam = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.01, 10); vmScene.add(vmCam); // Saltline-style narrow viewmodel FOV: a bigger, less distorted gun
 const vmRoot = new THREE.Group(); vmCam.add(vmRoot);
-const vmHemi = new THREE.HemisphereLight(0xaab6c8, 0x3a3029, 2.2); vmScene.add(vmHemi);
-const vmKey = new THREE.DirectionalLight(0xffb27a, 3.2); vmScene.add(vmKey);
-const vmRim = new THREE.DirectionalLight(0x9fb8ff, 1.6); vmRim.position.set(-1.5, 0.5, -1); vmScene.add(vmRim);
+const vmHemi = new THREE.HemisphereLight(0xaab6c8, 0x3a3029, 1.3); vmScene.add(vmHemi);
+const vmKey = new THREE.DirectionalLight(0xffb27a, 2.3); vmScene.add(vmKey);
+const vmRim = new THREE.DirectionalLight(0x9fb8ff, 1.9); vmRim.position.set(-1.5, 0.5, -1); vmScene.add(vmRim);
 const vmMuzzle = new THREE.PointLight(0xffb060, 0, 2.5, 2); vmScene.add(vmMuzzle);
 
 // ---------- post ----------
