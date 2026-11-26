@@ -22,7 +22,7 @@ function mats() {
     fde: new THREE.MeshStandardMaterial({ color: 0x6a5c44, roughness: 0.72, metalness: 0.0, roughnessMap: rough }),
     wood: new THREE.MeshStandardMaterial({ color: 0x4a2c18, roughness: 0.55, metalness: 0.0 }),
     rubber: new THREE.MeshStandardMaterial({ color: 0x101010, roughness: 0.95 }),
-    glass: new THREE.MeshStandardMaterial({ color: 0x0a1418, roughness: 0.05, metalness: 0.9, transparent: true, opacity: 0.55, envMapIntensity: 2 }),
+    glass: new THREE.MeshStandardMaterial({ color: 0xcfe0e4, roughness: 0.02, metalness: 0.0, transparent: true, opacity: 0.1, depthWrite: false, envMapIntensity: 1.2 }), /* clear optic glass: aiming looks through it (the old dark mirror-glass blacked out the view) */
     brass: new THREE.MeshStandardMaterial({ color: 0xb08a3c, roughness: 0.3, metalness: 1.0 }),
     shell: new THREE.MeshStandardMaterial({ color: 0x8a1a14, roughness: 0.5, metalness: 0.1 }),
     glove: new THREE.MeshStandardMaterial({ color: 0x23241f, roughness: 0.92, map: knit }),

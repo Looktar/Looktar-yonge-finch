@@ -22,8 +22,11 @@ const QUAL = { high: { pr: 1.5, bloom: true, shadow: 4096, aa: true, ao: 'full',
 // diagnosis switches: ?nowet or #nowet (artifact links only carry a plain #name); #safe turns all of them off
 const QS = new URLSearchParams(location.search); const HS = location.hash.slice(1); const OFF = k => QS.has('no' + k) || HS === 'no' + k || HS === 'safe';
 const TOUCH = isTouch(); if (TOUCH) { document.body.classList.add('touch'); QUAL.low.pr = 1; QUAL.mid.pr = 1; }
-let Q = TOUCH ? QUAL.low : QUAL.mid; if (TOUCH) $('q-low').checked = true;
-try { const s = localStorage.getItem('yf_q'); if (s && QUAL[s]) { Q = QUAL[s]; $('q-' + s).checked = true; } } catch (e) { }
+// phones now default to mid too (shadows, bloom, a little volumetric light); applyQuality trims the costly parts on
+// touch devices and dynamic resolution keeps the frame rate. A saved choice from before v0.7.0 is ignored once,
+// because the old default saved 'low' for every phone that had ever pressed Start.
+let Q = QUAL.mid; $('q-mid').checked = true;
+try { const s = localStorage.getItem('yf_q'); if (localStorage.getItem('yf_qv') === '2' && s && QUAL[s]) { Q = QUAL[s]; $('q-' + s).checked = true; } } catch (e) { }
 
 // ---------- renderer / scene ----------
 const canvas = $('c');
@@ -39,7 +42,7 @@ const CHUNK0 = { fpv: THREE.ShaderChunk.fog_pars_vertex, fv: THREE.ShaderChunk.f
 // volumetric sun light (Saltline marches the sun's shadow map through the air): the shadow map is an orthographic
 // projection, so the shadow-space coordinate is affine along the view ray and can be interpolated between the camera
 // and the fragment; VOL steps are baked from the quality at load (0 on phones)
-const VOL = (Q && Q.vol) || 0;
+const VOL = Math.min((Q && Q.vol) || 0, TOUCH ? 5 : 99); /* phones: fewer volumetric steps (fill rate) */
 THREE.ShaderChunk.shadowmap_vertex = THREE.ShaderChunk.shadowmap_vertex + `
 #if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0 && defined(USE_FOG)
   vVolCam = directionalShadowMatrix[0] * vec4(cameraPosition, 1.0);
@@ -208,7 +211,8 @@ const grade = new ShaderPass({
 composer.addPass(grade);
 
 function applyQuality() {
-  renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); composer.setSize(innerWidth, innerHeight); if (typeof finalPass !== 'undefined') { const pr = Math.min(devicePixelRatio, Q.pr); finalPass.setSize(innerWidth * pr, innerHeight * pr); }
+  if (TOUCH) { Q.refl = 0; Q.aa = false; if (Q.pr < 1.5 && Q.shadow > 0) Q.pr = 1.5; } /* phones: no mirror pass or SMAA; sharper base resolution, scaled down by dynres if slow */
+  renderer.setPixelRatio(Math.min(devicePixelRatio, Q.prDyn || Q.pr)); renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(Math.min(devicePixelRatio, Q.prDyn || Q.pr)); composer.setSize(innerWidth, innerHeight); if (typeof finalPass !== 'undefined') { const pr = Math.min(devicePixelRatio, Q.pr); finalPass.setSize(innerWidth * pr, innerHeight * pr); }
   bloom.enabled = Q.bloom; if (typeof finalPass !== 'undefined') finalPass.enabled = !OFF('post'); if (typeof outPass !== 'undefined') outPass.enabled = OFF('post'); lampLights.forEach((l, i) => l.visible = i < Q.lights);
   if (OFF('ao') || (TOUCH && !window.__aoForce)) Q.ao = false; if (OFF('wet')) Q.refl = 0; if (OFF('bloom')) Q.bloom = false;
   aoPass.enabled = !!Q.ao; basePass.enabled = !Q.ao; aoPass.configuration.halfRes = Q.ao !== 'full'; smaa.enabled = Q.aa;
@@ -326,7 +330,7 @@ function resume() { $('pause').style.display = 'none'; S.state = 'play'; sfx.res
 $('resume').onclick = resume;
 $('start').disabled = true; $('start').textContent = '加载角色…';
 $('start').onclick = () => {
-  const qs = document.querySelector('input[name=q]:checked').value; Q = QUAL[qs]; try { localStorage.setItem('yf_q', qs); } catch (e) { }
+  const qs = document.querySelector('input[name=q]:checked').value; Q = QUAL[qs]; try { localStorage.setItem('yf_q', qs); localStorage.setItem('yf_qv', '2'); } catch (e) { }
   applyQuality(); sfx.init(); sfx.resume(); $('menu').style.display = 'none'; $('hud').style.display = 'block'; goFull(); if (TOUCH && !TC) TC = initTouch(touchApi); document.body.classList.add('playing'); newGame(); tryLock();
 };
 $('again').onclick = () => { $('over').style.display = 'none'; $('hud').style.display = 'block'; goFull(); newGame(); tryLock(); };
@@ -646,9 +650,21 @@ function ambient(dt, t) {
   sky.position.copy(camera.position);
 }
 
+// dynamic resolution (as Saltline does, 0.6-1.0 of the target): every second, step the pixel ratio down when frames
+// run long and back up when there is headroom; skipped under automation so test screenshots stay comparable
+let dynAcc = 0, dynN = 0;
+function dynRes(ms) {
+  if (S.state !== 'play' || navigator.webdriver || OFF('dynres') || !(ms > 0) || ms > 500) return;
+  dynAcc += ms; dynN++; if (dynAcc < 1000) return;
+  const avg = dynAcc / dynN; dynAcc = 0; dynN = 0;
+  const top = Math.min(devicePixelRatio, Q.pr), cur = Q.prDyn || top; let next = cur;
+  if (avg > 24) next = Math.max(top * 0.55, cur * 0.88); else if (avg < 15) next = Math.min(top, cur * 1.08);
+  if (Math.abs(next - cur) / cur > 0.03) { Q.prDyn = next; applyQuality(); }
+}
 function frame(now) {
   requestAnimationFrame(frame); frameNo++;
-  let dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const fms = now - last; let dt = Math.min(0.05, fms / 1000); last = now;
+  dynRes(fms);
   const t = now / 1000;
   if (S.state === 'play') update(dt);
   else if (S.state === 'menu') { // slow attract camera around the intersection
@@ -742,4 +758,4 @@ if (HS === 'debug' || HS === 'diag' || QS.has('debug')) {
   window.__diag = diag;
   if (HS === 'diag') setTimeout(runD, 4000);
 }
-window.__yf = { Raycaster: THREE.Raycaster, spawnZombie, S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun, tick: () => frameNo++, mirror, WET, finalPass, vmScene, vmCam, vmRoot };
+window.__yf = { Raycaster: THREE.Raycaster, spawnZombie, input: touchApi, S, player, zombies, camera, W, fire, update, renderer, scene, sun, bloom, composer, placeSun, tick: () => frameNo++, mirror, WET, finalPass, vmScene, vmCam, vmRoot };
