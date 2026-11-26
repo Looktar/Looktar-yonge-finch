@@ -17,7 +17,7 @@ const server = http.createServer((q, r) => {
 
 const CASES = [
   { name: 'desktop', ctx: { viewport: { width: 1280, height: 720 } }, q: 'mid' },
-  { name: 'iphone', ctx: { ...devices['iPhone 13 landscape'] }, q: 'low' },
+  { name: 'iphone', ctx: { ...devices['iPhone 13 landscape'] }, q: 'mid' }, // the phone default since v0.7.0
 ];
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 let failed = 0;
